@@ -1,0 +1,83 @@
+# Project Specific
+
+-*
+
+Database/Backups/
+*/Database/Backups/
+
+CompressedFiles/
+*/CompressedFiles/
+
+x509Cert/
+*/x509Cert/
+
+X509Cert/
+*/X509Cert/
+
+
+#compressed files
+*.tgz
+*.txz
+*.zst
+
+
+# Godot executables
+*.exe
+*.64
+*.x86_64
+*.app
+
+# Godot-specific ignores
+*.pck
+.import/
+*/.import/
+export.cfg
+export_presets.cfg
+
+# Imported translations (automatically generated from CSV files)
+*.translation
+
+# Mono-specific ignores
+.mono/
+data_*/
+
+# Local History for Visual Studio Code
+.history/
+
+# Built Visual Studio Code Extensions
+*.vsix
+
+# Object files
+*.o
+*.obj
+*.os
+*.lo
+
+# Binary executables
+*.exe
+*.dll
+*.so
+*.dylib
+a.out
+
+# SCons directories and files
+build/
+.sconsign.dblite
+.scons_cache/
+
+# Configuration files
+config.log
+config.status
+
+# VSCode
+*.code-workspace
+workspace.code-workspace
+.vscode/*
+
+# IDE and editor directories
+.idea/
+
+# Other files and directories to ignore
+*.user
+*.suo
+cache/
