@@ -9,7 +9,9 @@
 /* This file was derived from information found at                       */
 /* https://tools.ietf.org/html/rfc8032#page-44                           */
 /*************************************************************************/
-/* Copyright (c) 2021 Shawn Shipton. https://vikingtinkerer.com          */
+/* This file was derived from information found at                       */
+/* https://tools.ietf.org/html/rfc8032                                   */
+/* Copyright (c) 2021-2025 Shawn Shipton. https://vikingtinkerer.com     */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */

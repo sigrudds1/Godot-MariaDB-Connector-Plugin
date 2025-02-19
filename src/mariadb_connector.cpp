@@ -1,12 +1,13 @@
 /*************************************************************************/
 /*  mariadb.cpp                                                          */
 /*************************************************************************/
-/*                       This file is part of:                           */
+/*                     This file is part of the                          */
+/*                     MariaDB connection module                         */
+/*                    for use in the Godot Engine                        */
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
+/* Copyright (c) 2021-2025 Shawn Shipton. https://vikingtinkerer.com     */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -29,16 +30,15 @@
 /*************************************************************************/
 
 #include "mariadb_connector.hpp"
-
 #include "mariadb_conversions.hpp"
+#include "mbedtls/sha512.h"
+#include "ed25519_ref10/ed25519_auth.h"
 
 #include <godot_cpp/core/memory.hpp>
 #include <godot_cpp/classes/time.hpp>
 #include <godot_cpp/classes/os.hpp>
-#include<godot_cpp/variant/utility_functions.hpp>
+#include <godot_cpp/variant/utility_functions.hpp>
 
-#include <mbedtls/sha512.h>
-#include "ed25519_ref10/ed25519_auth.h"
 
 // #include <godot_cpp/variant/utility_functions.hpp>
 

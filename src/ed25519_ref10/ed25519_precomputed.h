@@ -1,12 +1,13 @@
 /*************************************************************************/
-/*  ed25519_precomputed.h                                                   */
+/*  ed25519_precomputed.h                                                */
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
+/* This file was derived from information found at                       */
+/* https://tools.ietf.org/html/rfc8032                                   */
+/* Copyright (c) 2021-2025 Shawn Shipton. https://vikingtinkerer.com     */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -27,9 +28,6 @@
 /* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
-
-/* This file was derived from information found at                       */
-/* https://tools.ietf.org/html/rfc8032#page-44                           */
 
 #ifndef ED25519_PRECOMPUTED_H
 #define ED25519_PRECOMPUTED_H
