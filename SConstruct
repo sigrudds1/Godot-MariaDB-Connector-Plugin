@@ -10,7 +10,7 @@ def validate_parent_dir(key, val, env):
         raise UserError("'%s' is not a directory: %s" % (key, os.path.dirname(val)))
 
 
-libname = "MariaDBConnector"
+libname = "libmariadb_connector"
 projectdir = "demo"
 
 localEnv = Environment(tools=["default"], PLATFORM="")

@@ -142,7 +142,7 @@ private:
 	PackedByteArray _password_hashed;
 	PackedByteArray _dbname;
 
-	StreamPeerTCP _stream;
+	Ref<StreamPeerTCP> _stream;
 	String _ip;
 	int _port = 0;
 

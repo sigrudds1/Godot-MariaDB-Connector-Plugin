@@ -30,6 +30,7 @@ func _ready() -> void:
 #	_insert_many_columns()
 #	_insert_many_records()
 	_run_db()
+	pass
 
 func _exit_tree() -> void:
 	db.disconnect_db()
@@ -102,4 +103,3 @@ func _insert_many_records() -> void:
 
 func _on_timer_timeout() -> void:
 	_run_db()
-

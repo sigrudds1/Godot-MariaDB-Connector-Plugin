@@ -46,6 +46,7 @@
 using namespace godot;
 
 MariaDBConnector::MariaDBConnector() {
+	_stream.instantiate();
 }
 
 MariaDBConnector::~MariaDBConnector() {
@@ -105,7 +106,11 @@ void MariaDBConnector::m_add_packet_header(PackedByteArray &p_pkt, uint8_t p_pkt
 // 	}
 // }
 
-uint32_t MariaDBConnector::m_chk_rcv_bfr(PackedByteArray &p_bfr, int &p_bfr_size, const size_t p_cur_pos, const size_t p_need) {
+uint32_t MariaDBConnector::m_chk_rcv_bfr(
+		PackedByteArray &p_bfr,
+		int &p_bfr_size,
+		const size_t p_cur_pos,
+		const size_t p_need) {
 	if (p_bfr_size - p_cur_pos < p_need)
 		p_bfr.append_array(m_recv_data(1000));
 		// m_append_thread_data(p_bfr);
@@ -155,7 +160,7 @@ Error MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_type, c
 
 	// Only send the first 4 bytes(32 bits) of capabilities the remaining will be sent later in another 4 byte
 	PackedByteArray send_buffer_vec = little_endian_to_vbytes(_client_capabilities, 4);
-	printf("_client_cap %ld", _client_capabilities);
+	// printf("_client_cap %ld", _client_capabilities);
 
 	// int<4> max packet size
 	// temp_vec = little_endian_bytes((uint32_t)0x40000000, 4);
@@ -237,7 +242,7 @@ Error MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_type, c
 	//string<lenenc> value
 
 	m_add_packet_header(send_buffer_vec, ++seq_num);
-	_stream.put_data(send_buffer_vec);
+	_stream->put_data(send_buffer_vec);
 
 	srvr_response = m_recv_data(1000);
 	size_t itr = 4;
@@ -272,7 +277,7 @@ Error MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_type, c
 
 	m_add_packet_header(send_buffer_vec, ++seq_num);
 
-	Error err = _stream.put_data(send_buffer_vec);
+	Error err = _stream->put_data(send_buffer_vec);
 	ERR_FAIL_COND_V_MSG(err != Error::OK, err, "Failed to put data!");
 
 	srvr_response = m_recv_data(1000);
@@ -297,10 +302,13 @@ Error MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_type, c
 }
 
 Error MariaDBConnector::m_connect() {
+
 	disconnect_db();
+
+
 	Error err;
 	if (_ip.is_valid_ip_address() && _port > 0) {
-		err = _stream.connect_to_host(_ip, _port);
+		err = _stream->connect_to_host(_ip, _port);
 	} else {
 		err = Error::ERR_INVALID_PARAMETER;
 	}
@@ -308,15 +316,15 @@ Error MariaDBConnector::m_connect() {
 	ERR_FAIL_COND_V_MSG(err != Error::OK, err, "Cannot connect to host with IP: " + String(_ip) + " and port: " + itos(_port));
 
 	for (size_t i = 0; i < 1000; i++) {
-		_stream.poll();
-		if (_stream.get_status() == StreamPeerTCP::STATUS_CONNECTED) {
+		_stream->poll();
+		if (_stream->get_status() == StreamPeerTCP::STATUS_CONNECTED) {
 			break;
 		} else {
 			OS::get_singleton()->delay_usec(1000);
 		}
 	}
 
-	ERR_FAIL_COND_V_MSG(_stream.get_status() != StreamPeerTCP::STATUS_CONNECTED, Error::ERR_CONNECTION_ERROR,
+	ERR_FAIL_COND_V_MSG(_stream->get_status() != StreamPeerTCP::STATUS_CONNECTED, Error::ERR_CONNECTION_ERROR,
 			"Cannot connect to host with IP: " + String(_ip) + " and port: " + itos(_port));
 
 
@@ -435,14 +443,14 @@ PackedByteArray MariaDBConnector::m_recv_data(uint32_t p_timeout) {
 	uint64_t start_msec = Time::get_singleton()->get_ticks_msec();
 	uint64_t time_lapse = 0;
 	bool data_rcvd = false;
-	printf("start\n");
+	// printf("start\n");
 	while (is_connected_db() && time_lapse < p_timeout) {
-		_stream.poll();
-		byte_cnt = _stream.get_available_bytes();
+		_stream->poll();
+		byte_cnt = _stream->get_available_bytes();
 		if (byte_cnt > 0) {
 			// Array recv_buffer = _stream.get_data(byte_cnt);
 			data_rcvd = true;
-			out_buffer.append_array(_stream.get_data(byte_cnt)[1]);
+			out_buffer.append_array(_stream->get_data(byte_cnt)[1]);
 			start_msec = Time::get_singleton()->get_ticks_msec();
 		} else if (data_rcvd) {
 			break;
@@ -629,14 +637,24 @@ void MariaDBConnector::m_update_username(String p_username) {
 }
 
 //public
-Error MariaDBConnector::connect_db(String p_host, int p_port, String p_dbname, String p_username, String p_hashed_password,
-		AuthType p_authtype, bool p_is_prehashed) {
+Error MariaDBConnector::connect_db(
+		String p_host,
+		int p_port,
+		String p_dbname,
+		String p_username,
+		String p_hashed_password,
+		AuthType p_authtype,
+		bool p_is_prehashed) {
 
-	if (p_host.is_valid_ip_address()) {
+	if (p_host.is_valid_ip_address())
+	{
 		_ip = p_host;
-	} else {
+	}
+	else
+	{
 		_ip = IP::get_singleton()->resolve_hostname(p_host, (IP::Type)_ip_type);
 	}
+
 	_port = p_port;
 	// _tcp_polling = false;
 	// _running = true;
@@ -678,8 +696,8 @@ void MariaDBConnector::disconnect_db() {
 		//say goodbye too the server
 		// uint8_t output[5] = {0x01, 0x00, 0x00, 0x00, 0x01};
 		String str = "0100000001";
-		_stream.put_data(str.hex_decode());
-		_stream.disconnect_from_host();
+		_stream->put_data(str.hex_decode());
+		_stream->disconnect_from_host();
 	}
 	_authenticated = false;
 }
@@ -735,8 +753,8 @@ PackedByteArray MariaDBConnector::get_mysql_native_password_hash(PackedByteArray
 }
 
 bool MariaDBConnector::is_connected_db() {
-	_stream.poll();
-	return _stream.get_status() == StreamPeerTCP::STATUS_CONNECTED;
+	_stream->poll();
+	return _stream->get_status() == StreamPeerTCP::STATUS_CONNECTED;
 }
 
 Variant MariaDBConnector::query(String sql_stmt) {
@@ -771,7 +789,7 @@ Variant MariaDBConnector::query(String sql_stmt) {
 
 	_last_transmitted = send_buffer_vec;
 	// _tcp_mutex.lock();
-	_stream.put_data(send_buffer_vec);
+	_stream->put_data(send_buffer_vec);
 	// _tcp_mutex.unlock();
 
 	PackedByteArray srvr_response = m_recv_data(1000);
