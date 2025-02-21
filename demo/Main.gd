@@ -16,7 +16,7 @@ var ed:Dictionary = {
 }
 
 var qry_stmt_array: PackedStringArray = [
-	"SELECT * FROM Godot_Test.many_records;",
+	"SELECT * FROM Godot_Test.many_records LIMIT 1;",
 	"SELECT * FROM Godot_Test.many_columns;"
 ]
 
@@ -47,11 +47,13 @@ func _run_db() -> void:
 	if db.is_connected_db():
 		var start_uticks := Time.get_ticks_usec()
 		var stmt: String = qry_stmt_array[0]
-#		print(stmt)
+		print(stmt)
 		var qry = db.query(stmt)
 		if typeof(qry) == TYPE_ARRAY:
 			print("total records received:", qry.size(), " time:", 
 				Time.get_ticks_usec() - start_uticks, " usecs itr:", itr)
+			if qry.size() > 0:
+				print(qry[0])
 		else:
 			print(stmt)
 			print("itr:", itr, " - ERROR:", qry)

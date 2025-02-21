@@ -426,6 +426,7 @@ Variant MariaDBConnector::m_get_type_data(const int p_db_field_type, const Packe
 	return 0;
 }
 
+
 MariaDBConnector::AuthType MariaDBConnector::m_get_server_auth_type(String p_srvr_auth_name) {
 	AuthType server_auth_type = AUTH_TYPE_ED25519;
 	if (p_srvr_auth_name == "mysql_native_password") {
@@ -794,9 +795,8 @@ Variant MariaDBConnector::query(String sql_stmt) {
 
 	PackedByteArray srvr_response = m_recv_data(1000);
 	// m_append_thread_data(srvr_response);
-	bfr_size = srvr_response.size();
 
-	if (bfr_size == 0) {
+	if (srvr_response.size() == 0) {
 		return (uint32_t)ERR_NO_RESPONSE;
 	}
 
@@ -806,7 +806,7 @@ Variant MariaDBConnector::query(String sql_stmt) {
 	++pkt_itr;
 
 	/* https://mariadb.com/kb/en/result-set-packets/
-	 * The pkt_itr should be at 3, we are on teh 4th byte and wlll iterate before use
+	 * The pkt_itr should be at 3, we are on the 4th byte and wlll iterate before use
 	 * Resultset metadata
 	 * All segment packets start with packet length(3 bytes) and sequence number
 	 * This is a small packet with packet length of 1 to 9 of 4 to 19 bytes
@@ -815,6 +815,7 @@ Variant MariaDBConnector::query(String sql_stmt) {
 
 	uint64_t col_cnt = 0;
 	uint8_t test = srvr_response[++pkt_itr];
+	// print_line("Column Count Test Byte:" + String::num_int64(test, 16));
 	// https://mariadb.com/kb/en/protocol-data-types/#length-encoded-integers
 	if (test == 0xFF) {
 		int err = srvr_response[pkt_itr + 1] + (srvr_response[pkt_itr + 2] << 8);
@@ -918,17 +919,21 @@ Variant MariaDBConnector::query(String sql_stmt) {
 		pkt_itr += 1;
 		//	int<2> - unused -
 		pkt_itr += 2;
-		Dictionary data;
-		data["name"] = column_name;
-		data["char_set"] = char_set;
-		data["field"] = field_type;
-		col_data.push_back(data);
+		Dictionary column_data;
+		column_data["name"] = column_name;
+		column_data["char_set"] = char_set;
+		column_data["field_type"] = field_type;
+
+		col_data.push_back(column_data);
 	}
 
 	//	if not (CLIENT_DEPRECATE_EOF capability set) get EOF_Packet
 	if (!dep_eof) {
 		pkt_itr += 5; //bypass for now
 	}
+
+	// String dict_string = Variant(col_data).stringify();
+	// print_line("Dictionary: " + dict_string);
 
 	Array arr;
 
@@ -988,11 +993,27 @@ Variant MariaDBConnector::query(String sql_stmt) {
 				ERR_FAIL_COND_V_EDMSG(m_chk_rcv_bfr(srvr_response, bfr_size, pkt_itr, len_encode) != OK, ERR_PACKET_LENGTH_MISMATCH,
 						vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_itr + len_encode));
 
-				if (len_encode > 0) {
+				// print_line("len_encode:" + String::num_int64(len_encode));
+				bool valid = false;
+
+				// NOTE when accessing Dictionaries in C++ you must assign the value to the expected type or you get undefined and erratic  behavior
+				String field_name = String(col_data[itr].get("name", &valid));
+				ERR_FAIL_COND_V_EDMSG(!valid, Variant(), vformat("ERROR: 'name' key is missing at index %d", itr));
+
+				if (len_encode > 0)	{
 					PackedByteArray data = m_get_pkt_bytes(srvr_response, ++pkt_itr, len_encode);
-					dict[col_data[itr]["name"]] = m_get_type_data(col_data[itr]["field_type"], data);
+					// ✅ Convert Variant to int64_t before passing it to m_get_type_data()
+					valid = false;
+					int64_t field_type = int64_t(col_data[itr].get("field_type", &valid));
+
+					if (!valid) {
+						// print_line("ERROR: 'field_type' key is missing at index " + String::num_int64(itr));
+						dict[field_name] = Variant(); // Store empty if missing
+					} else {
+						dict[field_name] = m_get_type_data(field_type, data);
+					}
 				} else {
-					dict[col_data[itr]["name"]] = Variant();
+					dict[field_name] = Variant();
 				}
 			}
 		}
