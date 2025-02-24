@@ -48,15 +48,15 @@ func _run_db() -> void:
 		var start_uticks := Time.get_ticks_usec()
 		var stmt: String = qry_stmt_array[0]
 		print(stmt)
-		var qry = db.query(stmt)
-		if typeof(qry) == TYPE_ARRAY:
-			print("total records received:", qry.size(), " time:", 
+		var qry_res = db.query(stmt) as Array[Dictionary]
+		if qry_res != null:
+			print("total records received:", qry_res.size(), " time:", 
 				Time.get_ticks_usec() - start_uticks, " usecs itr:", itr)
-			if qry.size() > 0:
-				print(qry[0])
+			if qry_res.size() > 0:
+				print(qry_res[0])
 		else:
 			print(stmt)
-			print("itr:", itr, " - ERROR:", qry)
+			print("itr:", itr, " - ERROR:", qry_res)
 		
 		itr += 1
 	else:

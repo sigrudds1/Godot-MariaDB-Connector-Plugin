@@ -47,6 +47,8 @@ using namespace godot;
 
 MariaDBConnector::MariaDBConnector() {
 	_stream.instantiate();
+	_error = OK;
+	_error_msg = "";
 }
 
 MariaDBConnector::~MariaDBConnector() {
@@ -63,6 +65,8 @@ void MariaDBConnector::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("connect_db", "hostname", "port", "database", "username", "password", "authtype",
 			"is_prehashed"), &MariaDBConnector::connect_db, DEFVAL(AUTH_TYPE_ED25519), DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("disconnect_db"), &MariaDBConnector::disconnect_db);
+	ClassDB::bind_method(D_METHOD("get_error"), &MariaDBConnector::get_error);
+	// ClassDB::bind_method(D_METHOD("get_error_msg"), &MariaDBConnector::get_error_msg);
 	ClassDB::bind_method(D_METHOD("get_last_query"), &MariaDBConnector::get_last_query);
 	ClassDB::bind_method(D_METHOD("get_last_query_converted"), &MariaDBConnector::get_last_query_converted);
 	ClassDB::bind_method(D_METHOD("get_last_response"), &MariaDBConnector::get_last_response);
@@ -71,6 +75,10 @@ void MariaDBConnector::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_dbl_to_string", "is_to_str"), &MariaDBConnector::set_dbl_to_string);
 	ClassDB::bind_method(D_METHOD("set_db_name", "db_name"), &MariaDBConnector::set_db_name);
 	ClassDB::bind_method(D_METHOD("query", "sql_stmt"), &MariaDBConnector::query);
+
+	// Expose error variables as properties for direct access
+	ClassDB::add_property("MariaDBConnector", PropertyInfo(Variant::INT, "error"), "", "get_error");
+	// ClassDB::add_property("MariaDBConnector", PropertyInfo(Variant::STRING, ""), "", "get_error_msg");
 
 	BIND_ENUM_CONSTANT(IP_TYPE_IPV4);
 	BIND_ENUM_CONSTANT(IP_TYPE_IPV6);
@@ -703,21 +711,6 @@ void MariaDBConnector::disconnect_db() {
 	_authenticated = false;
 }
 
-String MariaDBConnector::get_last_query() {
-	return _last_query;
-}
-
-PackedByteArray MariaDBConnector::get_last_query_converted() {
-	return _last_query_converted;
-}
-
-PackedByteArray MariaDBConnector::get_last_response() {
-	return _last_response;
-}
-
-PackedByteArray MariaDBConnector::get_last_transmitted() {
-	return _last_transmitted;
-}
 
 PackedByteArray MariaDBConnector::get_client_ed25519_signature(const PackedByteArray p_sha512_hashed_passwd, const PackedByteArray p_svr_msg)
 {
@@ -759,9 +752,12 @@ bool MariaDBConnector::is_connected_db() {
 }
 
 Variant MariaDBConnector::query(String sql_stmt) {
+	_error = OK;
 	if (!is_connected_db())
+		_error = ERR_NOT_CONNECTED;
 		return (uint32_t)ERR_NOT_CONNECTED;
 	if (!_authenticated)
+		_error = ERR_AUTH_FAILED;
 		return (uint32_t)ERR_AUTH_FAILED;
 
 	// _tcp_polling = true;
@@ -797,6 +793,7 @@ Variant MariaDBConnector::query(String sql_stmt) {
 	// m_append_thread_data(srvr_response);
 
 	if (srvr_response.size() == 0) {
+		_error = ERR_NO_RESPONSE;
 		return (uint32_t)ERR_NO_RESPONSE;
 	}
 
@@ -1025,18 +1022,4 @@ Variant MariaDBConnector::query(String sql_stmt) {
 	_last_response = PackedByteArray(srvr_response);
 
 	return Variant(arr);
-}
-
-void MariaDBConnector::set_dbl_to_string(bool p_is_to_str) {
-	_dbl_to_string = p_is_to_str;
-}
-
-// TODO If db is not the same and connected then change db on server
-void MariaDBConnector::set_db_name(String p_dbname) {
-	_dbname = p_dbname.to_utf8_buffer();
-	// _dbname = p_dbname.to_ascii_buffer(); // TODO Add character set compatibility??
-}
-
-void MariaDBConnector::set_ip_type(IpType p_type) {
-	_ip_type = p_type;
 }
