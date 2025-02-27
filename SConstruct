@@ -67,8 +67,13 @@ env["SHLIBPREFIX"] = ""
 # Strip "template_" from target name if present
 clean_target = env["target"].replace("template_", "")
 
-# Ensure filename includes lib_, platform, and cleaned target type
-file = "lib_{}.{}.{}{}".format(libname, env["platform"], clean_target, env["SHLIBSUFFIX"])
+# Detect architecture suffix for ARM64 builds
+arch_suffix = ""
+if env["platform"] == "linux" and env.get("arch", "") == "arm64":
+    arch_suffix = ".arm64"
+
+# Ensure filename includes lib_, platform, arch (if applicable), and cleaned target type
+file = "lib_{}{}.{}.{}{}".format(libname, arch_suffix, env["platform"], clean_target, env["SHLIBSUFFIX"])
 
 if env["platform"] == "macos":
     platlibname = "lib_{}.{}.{}".format(libname, env["platform"], clean_target)
