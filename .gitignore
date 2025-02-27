@@ -19,6 +19,7 @@ X509Cert/
 *.tgz
 *.txz
 *.zst
+*.zip
 
 
 # Godot executables
