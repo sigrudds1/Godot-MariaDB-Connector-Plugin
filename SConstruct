@@ -62,18 +62,16 @@ env.Append(CPPPATH=[
 sources = Glob("src/*.cpp") + Glob("src/ed25519_ref10/*.cpp") + Glob("src/mbedtls/library/*.c")
 
 # Remove "lib" prefix from the shared library file
-env["SHLIBPREFIX"] = ""
+# env["SHLIBPREFIX"] = ""
 
 # Strip "template_" from target name if present
 clean_target = env["target"].replace("template_", "")
 
 # Detect architecture suffix for ARM64 builds
-arch_suffix = ""
-if env["platform"] == "linux" and env.get("arch", "") == "arm64":
-    arch_suffix = ".arm64"
+arch_suffix = env.get("arch", "")
 
 # Ensure filename includes lib_, platform, arch (if applicable), and cleaned target type
-file = "lib_{}{}.{}.{}{}".format(libname, arch_suffix, env["platform"], clean_target, env["SHLIBSUFFIX"])
+file = "lib_{}.{}.{}.{}{}".format(libname, env["platform"], clean_target, arch_suffix, env["SHLIBSUFFIX"])
 
 if env["platform"] == "macos":
     platlibname = "lib_{}.{}.{}".format(libname, env["platform"], clean_target)

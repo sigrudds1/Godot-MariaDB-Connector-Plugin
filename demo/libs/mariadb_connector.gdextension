@@ -12,7 +12,7 @@ windows.release.x86_32 = "res://libs/lib_mariadb_connector.windows.release.x86_3
 windows.debug.x86_64 = "res://libs/lib_mariadb_connector.windows.debug.x86_64.dll"
 windows.release.x86_64 = "res://libs/lib_mariadb_connector.windows.release.x86_64.dll"
 
-linux.debug.x86_64 = "res://libs/lib_mariadb_connector.linux.debug.so"
+linux.debug.x86_64 = "res://libs/lib_mariadb_connector.linux.debug.x86_64.so"
 linux.release.x86_64 = "res://libs/lib_mariadb_connector.linux.release.x86_64.so"
 
 linux.debug.arm64 = "res://libs/lib_mariadb_connector.linux.debug.arm64.so"
