@@ -1,7 +1,7 @@
 /**
  * \file platform_time.h
  *
- * \brief Mbed TLS Platform time abstraction
+ * \brief mbed TLS Platform time abstraction
  */
 /*
  *  Copyright The Mbed TLS Contributors
@@ -22,11 +22,7 @@
 #ifndef MBEDTLS_PLATFORM_TIME_H
 #define MBEDTLS_PLATFORM_TIME_H
 
-#if !defined(MBEDTLS_CONFIG_FILE)
-#include "mbedtls/config.h"
-#else
-#include MBEDTLS_CONFIG_FILE
-#endif
+#include "mbedtls/build_info.h"
 
 #ifdef __cplusplus
 extern "C" {

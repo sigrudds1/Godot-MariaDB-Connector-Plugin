@@ -59,6 +59,10 @@ data_*/
 *.exe
 a.out
 
+# lib files
+*.so
+*.dll
+
 # SCons directories and files
 build/
 .sconsign.dblite

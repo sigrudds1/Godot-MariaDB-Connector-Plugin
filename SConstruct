@@ -4,13 +4,11 @@ import os
 def normalize_path(val, env):
     return val if os.path.isabs(val) else os.path.join(env.Dir("#").abspath, val)
 
-
 def validate_parent_dir(key, val, env):
     if not os.path.isdir(normalize_path(os.path.dirname(val), env)):
         raise UserError("'%s' is not a directory: %s" % (key, os.path.dirname(val)))
 
-
-libname = "libmariadb_connector"
+libname = "mariadb_connector"
 projectdir = "demo"
 
 localEnv = Environment(tools=["default"], PLATFORM="")
@@ -49,26 +47,40 @@ env.Alias("compiledb", compilation_db)
 
 env = SConscript("godot-cpp/SConstruct", {"env": env, "customs": customs})
 
-env.Append(CPPPATH=["src/", "src/ed25519_ref10", "src/mbedtls/include", "src/mbedtls/include/library"])
-sources = Glob("src/*.cpp") + Glob("src/ed25519_ref10/*.cpp") + Glob("src/mbedtls/include/library/*.c")
+if env["platform"] == "windows":
+    env.Append(LIBS=["ws2_32", "bcrypt"])  # Link Windows networking and bcrypt
+    env.Append(LINKFLAGS=["-static-libgcc", "-static-libstdc++"])  # Ensure static linking
+
+env.Append(CPPPATH=[
+    "src/",
+    "src/ed25519_ref10",
+    "src/mbedtls/include",
+    "src/mbedtls/include/mbedtls",
+    "src/mbedtls/include/psa"
+])
+
+sources = Glob("src/*.cpp") + Glob("src/ed25519_ref10/*.cpp") + Glob("src/mbedtls/library/*.c")
 
 # Remove "lib" prefix from the shared library file
 env["SHLIBPREFIX"] = ""
-file = "{}{}{}".format(libname, env["suffix"], env["SHLIBSUFFIX"])
+
+# Strip "template_" from target name if present
+clean_target = env["target"].replace("template_", "")
+
+# Ensure filename includes lib_, platform, and cleaned target type
+file = "lib_{}.{}.{}{}".format(libname, env["platform"], clean_target, env["SHLIBSUFFIX"])
 
 if env["platform"] == "macos":
-    platlibname = "{}.{}.{}".format(libname, env["platform"], env["target"])
-    file = "{}.framework/{}".format(env["platform"], platlibname, platlibname)
+    platlibname = "lib_{}.{}.{}".format(libname, env["platform"], clean_target)
+    file = "{}.framework/{}".format(platlibname, platlibname)
 
-libraryfile = "bin/{}/{}".format(env["platform"], file)
+libraryfile = "{}/libs/{}".format(projectdir, file)  # Store all output in demo/lib/
 library = env.SharedLibrary(
     libraryfile,
     source=sources,
 )
 
-copy = env.InstallAs("{}/bin/{}/{}".format(projectdir, env["platform"], file), library)
-
-default_args = [library, copy]
+default_args = [library]
 if localEnv.get("compiledb", False):
     default_args += [compilation_db]
 Default(*default_args)

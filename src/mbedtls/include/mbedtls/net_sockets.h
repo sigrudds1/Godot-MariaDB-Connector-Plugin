@@ -37,12 +37,9 @@
  */
 #ifndef MBEDTLS_NET_SOCKETS_H
 #define MBEDTLS_NET_SOCKETS_H
+#include "mbedtls/private_access.h"
 
-#if !defined(MBEDTLS_CONFIG_FILE)
-#include "mbedtls/config.h"
-#else
-#include MBEDTLS_CONFIG_FILE
-#endif
+#include "mbedtls/build_info.h"
 
 #include "mbedtls/ssl.h"
 
@@ -96,7 +93,13 @@ extern "C" {
  * structures for hand-made UDP demultiplexing).
  */
 typedef struct mbedtls_net_context {
-    int fd;             /**< The underlying file descriptor                 */
+    /** The underlying file descriptor.
+     *
+     * This field is only guaranteed to be present on POSIX/Unix-like platforms.
+     * On other platforms, it may have a different type, have a different
+     * meaning, or be absent altogether.
+     */
+    int fd;
 }
 mbedtls_net_context;
 
@@ -283,10 +286,6 @@ int mbedtls_net_recv_timeout(void *ctx, unsigned char *buf, size_t len,
  * \brief          Closes down the connection and free associated data
  *
  * \param ctx      The context to close
- *
- * \note           This function frees and clears data associated with the
- *                 context but does not free the memory pointed to by \p ctx.
- *                 This memory is the responsibility of the caller.
  */
 void mbedtls_net_close(mbedtls_net_context *ctx);
 
@@ -294,10 +293,6 @@ void mbedtls_net_close(mbedtls_net_context *ctx);
  * \brief          Gracefully shutdown the connection and free associated data
  *
  * \param ctx      The context to free
- *
- * \note           This function frees and clears data associated with the
- *                 context but does not free the memory pointed to by \p ctx.
- *                 This memory is the responsibility of the caller.
  */
 void mbedtls_net_free(mbedtls_net_context *ctx);
 

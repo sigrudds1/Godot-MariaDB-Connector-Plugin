@@ -21,23 +21,15 @@
  */
 #ifndef MBEDTLS_THREADING_H
 #define MBEDTLS_THREADING_H
+#include "mbedtls/private_access.h"
 
-#if !defined(MBEDTLS_CONFIG_FILE)
-#include "mbedtls/config.h"
-#else
-#include MBEDTLS_CONFIG_FILE
-#endif
+#include "mbedtls/build_info.h"
 
 #include <stdlib.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/* MBEDTLS_ERR_THREADING_FEATURE_UNAVAILABLE is deprecated and should not be
- * used. */
-/** The selected feature is not available. */
-#define MBEDTLS_ERR_THREADING_FEATURE_UNAVAILABLE         -0x001A
 
 /** Bad input parameters to function. */
 #define MBEDTLS_ERR_THREADING_BAD_INPUT_DATA              -0x001C
@@ -47,11 +39,11 @@ extern "C" {
 #if defined(MBEDTLS_THREADING_PTHREAD)
 #include <pthread.h>
 typedef struct mbedtls_threading_mutex_t {
-    pthread_mutex_t mutex;
+    pthread_mutex_t MBEDTLS_PRIVATE(mutex);
     /* is_valid is 0 after a failed init or a free, and nonzero after a
      * successful init. This field is not considered part of the public
      * API of Mbed TLS and may change without notice. */
-    char is_valid;
+    char MBEDTLS_PRIVATE(is_valid);
 } mbedtls_threading_mutex_t;
 #endif
 
@@ -63,9 +55,9 @@ typedef struct mbedtls_threading_mutex_t {
  * \brief           Set your alternate threading implementation function
  *                  pointers and initialize global mutexes. If used, this
  *                  function must be called once in the main thread before any
- *                  other Mbed TLS function is called, and
+ *                  other mbed TLS function is called, and
  *                  mbedtls_threading_free_alt() must be called once in the main
- *                  thread after all other Mbed TLS functions.
+ *                  thread after all other mbed TLS functions.
  *
  * \note            mutex_init() and mutex_free() don't return a status code.
  *                  If mutex_init() fails, it should leave its argument (the

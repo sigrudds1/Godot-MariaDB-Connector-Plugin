@@ -53,21 +53,21 @@ extern "C"{
 		uint8_t hram[64];
 		ge_p3 R;
 
-		mbedtls_sha512_starts_ret((mbedtls_sha512_context *)ctx, 0);
-		mbedtls_sha512_update_ret((mbedtls_sha512_context *)ctx, private_key_src + 32, 32);
-		mbedtls_sha512_update_ret((mbedtls_sha512_context *)ctx, message_src, message_len);
-		mbedtls_sha512_finish_ret((mbedtls_sha512_context *)ctx, sha512);
+		mbedtls_sha512_starts((mbedtls_sha512_context *)ctx, 0);
+		mbedtls_sha512_update((mbedtls_sha512_context *)ctx, private_key_src + 32, 32);
+		mbedtls_sha512_update((mbedtls_sha512_context *)ctx, message_src, message_len);
+		mbedtls_sha512_finish((mbedtls_sha512_context *)ctx, sha512);
 		mbedtls_sha512_free((mbedtls_sha512_context *)ctx);
 
 		sc_reduce(sha512);
 		ge_scalarmult_base(&R, sha512);
 		ge_p3_tobytes(signature_dst, &R);
 
-		mbedtls_sha512_starts_ret((mbedtls_sha512_context *)ctx, 0);
-		mbedtls_sha512_update_ret((mbedtls_sha512_context *)ctx, signature_dst, 32);
-		mbedtls_sha512_update_ret((mbedtls_sha512_context *)ctx, public_key_src, 32);
-		mbedtls_sha512_update_ret((mbedtls_sha512_context *)ctx, message_src, message_len);
-		mbedtls_sha512_finish_ret((mbedtls_sha512_context *)ctx, hram);
+		mbedtls_sha512_starts((mbedtls_sha512_context *)ctx, 0);
+		mbedtls_sha512_update((mbedtls_sha512_context *)ctx, signature_dst, 32);
+		mbedtls_sha512_update((mbedtls_sha512_context *)ctx, public_key_src, 32);
+		mbedtls_sha512_update((mbedtls_sha512_context *)ctx, message_src, message_len);
+		mbedtls_sha512_finish((mbedtls_sha512_context *)ctx, hram);
 		mbedtls_sha512_free((mbedtls_sha512_context *)ctx);
 
 		sc_reduce(hram);

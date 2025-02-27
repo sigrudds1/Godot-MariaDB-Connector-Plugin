@@ -624,10 +624,10 @@ void MariaDBConnector::m_update_password(String p_password) {
 		_password_hashed.resize(64);
 		void *ctx = memalloc(sizeof(mbedtls_sha512_context));
 		mbedtls_sha512_init((mbedtls_sha512_context *)ctx);
-		mbedtls_sha512_starts_ret((mbedtls_sha512_context *)ctx, 0);
-		mbedtls_sha512_update_ret((mbedtls_sha512_context *)ctx, (uint8_t *)p_password.ascii().ptr(),
+		mbedtls_sha512_starts((mbedtls_sha512_context *)ctx, 0);
+		mbedtls_sha512_update((mbedtls_sha512_context *)ctx, (uint8_t *)p_password.ascii().ptr(),
 				p_password.length());
-		mbedtls_sha512_finish_ret((mbedtls_sha512_context *)ctx, _password_hashed.ptrw());
+		mbedtls_sha512_finish((mbedtls_sha512_context *)ctx, _password_hashed.ptrw());
 		mbedtls_sha512_free((mbedtls_sha512_context *)ctx);
 		memfree((mbedtls_sha512_context *)ctx);
 	}
