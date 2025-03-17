@@ -69,12 +69,12 @@ func _connect_to_db_srvr() -> void:
 			ed["db_hostname"],
 			ed["db_port"],
 			ed["db_name"],
-			#ed["db_ed_user"],
-			#ed["db_sha512_hashed_pwd"],
-			#MariaDBConnector.AUTH_TYPE_ED25519,
-			ed["db_plain_user"],
-			ed["db_plain_text_pwd"],
-			MariaDBConnector.AUTH_TYPE_MYSQL_NATIVE,
+			ed["db_ed_user"],
+			ed["db_sha512_hashed_pwd"],
+			MariaDBConnector.AUTH_TYPE_ED25519,
+			#ed["db_plain_user"],
+			#ed["db_plain_text_pwd"],
+			#MariaDBConnector.AUTH_TYPE_MYSQL_NATIVE,
 			#false
 		);
 	if err:

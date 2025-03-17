@@ -90,22 +90,6 @@ void MariaDBConnector::m_add_packet_header(PackedByteArray &p_pkt, uint8_t p_pkt
 	p_pkt = t.duplicate();
 }
 
-// void MariaDBConnector::m_append_thread_data(PackedByteArray &p_data, const uint64_t p_timeout) {
-// 	int sz = 0;
-// 	uint64_t start = Time::get_singleton()->get_ticks_msec();
-// 	while (sz == 0 && Time::get_singleton()->get_ticks_msec() - start <= p_timeout) {
-// 		_tcp_mutex.lock();
-// 		sz = _tcp_thread_data.size();
-// 		if (sz > 0) {
-// 			p_data.append_array(_tcp_thread_data);
-// 			_tcp_thread_data.clear();
-// 		}
-// 		_tcp_mutex.unlock();
-// 		if (sz == 0) {
-// 			OS::get_singleton()->delay_usec(1000);
-// 		}
-// 	}
-// }
 
 uint32_t MariaDBConnector::m_chk_rcv_bfr(
 		PackedByteArray &p_bfr,
@@ -376,30 +360,6 @@ Error MariaDBConnector::m_connect() {
 	return Error::OK;
 } //m_connect
 
-// void MariaDBConnector::m_tcp_thread_func() {
-// 	int32_t byte_cnt = 0;
-// 	PackedByteArray transfer_bfr;
-
-// 	while (_running) {
-// 		while (_tcp_polling) {
-// 			if (!is_connected_db())
-// 				continue;
-// 			byte_cnt = _stream.get_available_bytes();
-// 			if (byte_cnt > 0) {
-// 				Array rcv_bfr = _stream.get_data(byte_cnt);
-// 				transfer_bfr.append_array(rcv_bfr[1]);
-// 			}
-
-// 			if (transfer_bfr.size() > 0) {
-// 				_tcp_mutex.lock();
-// 				_tcp_thread_data.append_array(transfer_bfr);
-// 				transfer_bfr.clear();
-// 				_tcp_mutex.unlock();
-// 			}
-// 		}
-// 		OS::get_singleton()->delay_usec(1000);
-// 	}
-// }
 
 Variant MariaDBConnector::m_get_type_data(const int p_db_field_type, const PackedByteArray p_data) {
 	String rtn_val;
@@ -691,8 +651,8 @@ Error MariaDBConnector::connect_db(
 				return Error::ERR_INVALID_PARAMETER;
 			}
 		} else if (_client_auth_type == AUTH_TYPE_ED25519) {
-			if (!is_valid_hex(p_password, 64)){
-				ERR_PRINT("Password not proper for ED25519, must be 64 hex characters!");
+			if (!is_valid_hex(p_password, 128)){
+				ERR_PRINT("Password not proper for ED25519, must be 128 hex characters!");
 				return Error::ERR_INVALID_PARAMETER;
 			}
 		}
