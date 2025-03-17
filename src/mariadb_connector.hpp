@@ -193,6 +193,21 @@ private:
 	void m_update_password(String p_password);
 	void m_update_username(String P_username);
 
+	static inline bool is_valid_hex(const String &p_string, int expected_length = 0) {
+        if (expected_length > 0 && p_string.length() != expected_length) {
+            return false;
+        }
+
+        for (int i = 0; i < p_string.length(); i++) {
+            char32_t c = p_string.unicode_at(i);
+            if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f'))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
 
 protected:
 	static void _bind_methods();

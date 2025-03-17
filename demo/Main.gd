@@ -12,7 +12,8 @@ var ed:Dictionary = {
 	"db_max_conns": 5,
 	"db_name": "Godot_Test",
 	"db_port": 3306,
-	"db_user": "godot_user"
+	"db_plain_user": "godot_user",
+	"db_ed_user": "ed_user"
 }
 
 var qry_stmt_array: PackedStringArray = [
@@ -68,10 +69,13 @@ func _connect_to_db_srvr() -> void:
 			ed["db_hostname"],
 			ed["db_port"],
 			ed["db_name"],
-			ed["db_user"],
-			ed["db_sha512_hashed_pwd"],
-			MariaDBConnector.AUTH_TYPE_ED25519,
-			true
+			#ed["db_ed_user"],
+			#ed["db_sha512_hashed_pwd"],
+			#MariaDBConnector.AUTH_TYPE_ED25519,
+			ed["db_plain_user"],
+			ed["db_plain_text_pwd"],
+			MariaDBConnector.AUTH_TYPE_MYSQL_NATIVE,
+			#false
 		);
 	if err:
 		print("db connect err:", err)

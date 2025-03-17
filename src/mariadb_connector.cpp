@@ -32,6 +32,7 @@
 #include "mariadb_connector.hpp"
 #include "mariadb_conversions.hpp"
 #include "mbedtls/sha512.h"
+#include "mbedtls/sha1.h"
 #include "ed25519_ref10/ed25519_auth.h"
 
 #include <godot_cpp/core/memory.hpp>
@@ -203,8 +204,10 @@ Error MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_type, c
 	send_buffer_vec.push_back(0); //NUL terminated
 
 	PackedByteArray auth_response;
-	if (p_srvr_auth_type == AUTH_TYPE_MYSQL_NATIVE && (_client_auth_type == AUTH_TYPE_MYSQL_NATIVE))
+	if (p_srvr_auth_type == AUTH_TYPE_MYSQL_NATIVE && (_client_auth_type == AUTH_TYPE_MYSQL_NATIVE)) {
+		// print_line("Using MySQL Native Password");
 		auth_response = get_mysql_native_password_hash(_password_hashed, p_srvr_salt);
+	}
 
 	// if (server_capabilities & PLUGIN_AUTH_LENENC_CLIENT_DATA)
 	// string<lenenc> authentication data
@@ -267,7 +270,8 @@ Error MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_type, c
 	}
 
 	if (user_auth_type == AUTH_TYPE_ED25519 && _client_auth_type == AUTH_TYPE_ED25519) {
-		//srvr_auth_msg.assign(srvr_response.begin() + itr + 1, srvr_response.end());
+		// print_line(("using AUTH_TYPE_ED25519"));
+		// srvr_auth_msg.assign(srvr_response.begin() + itr + 1, srvr_response.end());
 		srvr_auth_msg.append_array(srvr_response.slice(itr + 1));
 		auth_response = get_client_ed25519_signature(_password_hashed, srvr_auth_msg);
 		send_buffer_vec = auth_response;
@@ -617,24 +621,23 @@ void MariaDBConnector::m_update_password(String p_password) {
 	if (_is_pre_hashed)
 		return;
 
-	//take the password and store it as the hash, only the hash is needed
+	// Store password as a hash, only the hash is needed
 	if (_client_auth_type == AUTH_TYPE_MYSQL_NATIVE) {
 		_password_hashed = p_password.sha1_buffer();
 	} else if (_client_auth_type == AUTH_TYPE_ED25519) {
 		_password_hashed.resize(64);
-		void *ctx = memalloc(sizeof(mbedtls_sha512_context));
-		mbedtls_sha512_init((mbedtls_sha512_context *)ctx);
-		mbedtls_sha512_starts((mbedtls_sha512_context *)ctx, 0);
-		mbedtls_sha512_update((mbedtls_sha512_context *)ctx, (uint8_t *)p_password.ascii().ptr(),
-				p_password.length());
-		mbedtls_sha512_finish((mbedtls_sha512_context *)ctx, _password_hashed.ptrw());
-		mbedtls_sha512_free((mbedtls_sha512_context *)ctx);
-		memfree((mbedtls_sha512_context *)ctx);
+
+		mbedtls_sha512_context ctx;
+		mbedtls_sha512_init(&ctx);
+		mbedtls_sha512_starts(&ctx, 0);
+		mbedtls_sha512_update(&ctx, reinterpret_cast<const uint8_t *>(p_password.utf8().ptr()), p_password.length());
+		mbedtls_sha512_finish(&ctx, _password_hashed.ptrw());
+		mbedtls_sha512_free(&ctx);
 	}
 }
 
 void MariaDBConnector::m_update_username(String p_username) {
-	_username = p_username.to_ascii_buffer();
+	_username = p_username.to_utf8_buffer();
 }
 
 //public
@@ -643,7 +646,7 @@ Error MariaDBConnector::connect_db(
 		int p_port,
 		String p_dbname,
 		String p_username,
-		String p_hashed_password,
+		String p_password,
 		AuthType p_authtype,
 		bool p_is_prehashed) {
 
@@ -668,7 +671,7 @@ Error MariaDBConnector::connect_db(
 		return Error::ERR_INVALID_PARAMETER;
 	}
 
-	if (p_hashed_password.length() <= 0) {
+	if (p_password.length() <= 0) {
 		ERR_PRINT("password not set");
 		return Error::ERR_INVALID_PARAMETER;
 	}
@@ -680,13 +683,27 @@ Error MariaDBConnector::connect_db(
 		set_db_name(p_dbname);
 	}
 
-	m_update_username(p_username);
 
 	if (p_is_prehashed) {
-		_password_hashed = hex_str_to_v_bytes(p_hashed_password);
-	} else {
-		m_update_password(p_hashed_password);
+		if (_client_auth_type == AUTH_TYPE_MYSQL_NATIVE) {
+			if (!is_valid_hex(p_password, 20)){
+				ERR_PRINT("Password not proper for MySQL Native prehash, must be 20 hex characters!");
+				return Error::ERR_INVALID_PARAMETER;
+			}
+		} else if (_client_auth_type == AUTH_TYPE_ED25519) {
+			if (!is_valid_hex(p_password, 20)){
+				ERR_PRINT("Password not proper for ED25519, must be 64 hex characters!");
+				return Error::ERR_INVALID_PARAMETER;
+			}
+		}
+		_password_hashed = hex_str_to_bytes(p_password);
 	}
+	else
+	{
+		m_update_password(p_password);
+	}
+
+	m_update_username(p_username);
 
 	return m_connect();
 }
@@ -729,28 +746,48 @@ PackedByteArray MariaDBConnector::get_client_ed25519_signature(const PackedByteA
 }
 
 PackedByteArray MariaDBConnector::get_mysql_native_password_hash(PackedByteArray p_sha1_hashed_passwd, PackedByteArray p_srvr_salt) {
-	//per https://mariadb.com/kb/en/connection/#mysql_native_password-plugin
-	//Both MariaDB and MySQL support this auth method
-	// uint8_t hash[20] = {};
-	PackedByteArray hash = String((const char *)p_sha1_hashed_passwd.ptr()).sha1_buffer();
-	// CryptoCore::sha1(p_sha1_hashed_passwd.ptr(), 20, hash);
+    // Per https://mariadb.com/kb/en/connection/#mysql_native_password-plugin
+    // Both MariaDB and MySQL support this authentication method
 
-	PackedByteArray combined_salt_pwd;
-	combined_salt_pwd.resize(40);
-	// uint8_t combined_salt_pwd[40] = {};
-	for (size_t i = 0; i < 20; i++) {
-		combined_salt_pwd[i] = p_srvr_salt[i];
-		combined_salt_pwd[i + 20] = hash[i];
-	}
+    // First SHA1 Hashing
+    PackedByteArray hash;
+    hash.resize(20); // SHA-1 produces a 20-byte output
 
-	// CryptoCore::sha1((const uint8_t *)combined_salt_pwd, 40, hash);
-	hash = String((const char *)combined_salt_pwd.ptr()).sha1_buffer();
-	PackedByteArray hash_out;
-	for (size_t i = 0; i < 20; i++) {
-		hash_out.push_back(p_sha1_hashed_passwd[i] ^ hash[i]);
-	}
+    mbedtls_sha1_context ctx;
+    mbedtls_sha1_init(&ctx);
+    mbedtls_sha1_starts(&ctx);
+    mbedtls_sha1_update(&ctx, p_sha1_hashed_passwd.ptr(), p_sha1_hashed_passwd.size());
+    mbedtls_sha1_finish(&ctx, hash.ptrw());
+    mbedtls_sha1_free(&ctx);
 
-	return hash_out;
+    // Combine server salt and hash
+    PackedByteArray combined_salt_pwd;
+    combined_salt_pwd.resize(40); // 20-byte salt + 20-byte hash
+
+    for (int i = 0; i < 20; i++) {
+        combined_salt_pwd.set(i, p_srvr_salt[i]);      // First 20 bytes: salt
+        combined_salt_pwd.set(i + 20, hash[i]);        // Next 20 bytes: hashed password
+    }
+
+    // Second SHA1 Hashing
+    PackedByteArray final_hash;
+    final_hash.resize(20);
+
+    mbedtls_sha1_init(&ctx);
+    mbedtls_sha1_starts(&ctx);
+    mbedtls_sha1_update(&ctx, combined_salt_pwd.ptr(), combined_salt_pwd.size());
+    mbedtls_sha1_finish(&ctx, final_hash.ptrw());
+    mbedtls_sha1_free(&ctx);
+
+    // XOR original password hash with final hash
+    PackedByteArray hash_out;
+    hash_out.resize(20);
+
+    for (int i = 0; i < 20; i++) {
+        hash_out.set(i, p_sha1_hashed_passwd[i] ^ final_hash[i]);
+    }
+
+    return hash_out;
 }
 
 bool MariaDBConnector::is_connected_db() {

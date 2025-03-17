@@ -54,12 +54,12 @@ inline T bytes_to_num_itr_pos(const uint8_t *src, const size_t byte_count, size_
 	return result;
 }
 
-inline PackedByteArray hex_str_to_v_bytes(const String &hex_str) {
+inline PackedByteArray hex_str_to_bytes(const String &hex_str) {
 	PackedByteArray bytes;
 	for (size_t i = 0; i < (size_t)hex_str.length(); i += 2) {
-		String byteString = hex_str.substr(i, 2);
-		uint8_t byte = (uint8_t)strtol(byteString.utf8().ptr(), NULL, 16);
-		bytes.push_back(byte);
+		String byte_string = hex_str.substr(i, 2);
+		int byte = byte_string.hex_to_int();
+		bytes.push_back(static_cast<uint8_t>(byte));
 	}
 
 	return bytes;
