@@ -691,7 +691,7 @@ Error MariaDBConnector::connect_db(
 				return Error::ERR_INVALID_PARAMETER;
 			}
 		} else if (_client_auth_type == AUTH_TYPE_ED25519) {
-			if (!is_valid_hex(p_password, 20)){
+			if (!is_valid_hex(p_password, 64)){
 				ERR_PRINT("Password not proper for ED25519, must be 64 hex characters!");
 				return Error::ERR_INVALID_PARAMETER;
 			}
