@@ -72,3 +72,8 @@ This project is licensed under the **MIT License**.
 
 For issues, open a ticket on [GitHub Issues](https://github.com/sigrudds1/Godot-MariaDB-Connector-Plugin/issues).
 
+## Donations
+If you find this project useful and would like to support development, consider donating:
+- [Buy Me a Coffee](https://buymeacoffee.com/VikingTinkerer)
+- [Ko-fi](https://ko-fi.com/vikingtinkerer)
+
