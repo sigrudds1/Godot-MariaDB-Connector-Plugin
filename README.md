@@ -38,28 +38,7 @@ You can find the demo inside the `demo/` folder, which demonstrates how to:
 - Execute queries (SELECT, INSERT, UPDATE, DELETE).
 - Handle results properly.
 
-## Build Instructions (For Contributors)
-
-### Dependencies
-
-Ensure you have:
-
-- **Godot 4.3+**
-- **SCons** (for building)
-- **GCC or Clang** (Linux/macOS) / **MinGW** (Windows)
-- **MariaDB C Connector**
-
-### Building
-
-```sh
-scons platform=linux arch=x86_64
-scons platform=windows arch=x86_64
-scons platform=linux arch=arm64
-```
-
 ## License
-
-This project is licensed under the **MIT License**.
 
 Unlike many other database connectors, this plugin is licensed under **MIT**, not **GPL**. Although **MariaDB itself is GPL**, this connector **only communicates with MariaDB servers via standard network protocols**—meaning it does **not** fall under GPL’s derivative work restrictions. This ensures **no licensing conflicts** when using this plugin in **closed-source** or **commercial** Godot projects.
 
@@ -69,6 +48,8 @@ Unlike many other database connectors, this plugin is licensed under **MIT**, no
 2. Create a feature branch.
 3. Commit your changes.
 4. Submit a Pull Request.
+
+You can find the build instructions at [Godot Docs](https://docs.godotengine.org/en/stable/tutorials/scripting/gdextension/gdextension_cpp_example.html).
 
 ## Support
 
