@@ -61,6 +61,8 @@ scons platform=linux arch=arm64
 
 This project is licensed under the **MIT License**.
 
+Unlike many other database connectors, this plugin is licensed under **MIT**, not **GPL**. Although **MariaDB itself is GPL**, this connector **only communicates with MariaDB servers via standard network protocols**—meaning it does **not** fall under GPL’s derivative work restrictions. This ensures **no licensing conflicts** when using this plugin in **closed-source** or **commercial** Godot projects.
+
 ## Contributing
 
 1. Fork the repository.
