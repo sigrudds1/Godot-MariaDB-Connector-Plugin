@@ -34,8 +34,6 @@ X509Cert/
 */.import/
 export.cfg
 export_presets.cfg
-bin/
-!demo/bin/
 
 # Imported translations (automatically generated from CSV files)
 *.translation
@@ -59,10 +57,6 @@ data_*/
 # Binary executables
 *.exe
 a.out
-
-# lib files
-*.so
-*.dll
 
 # SCons directories and files
 build/

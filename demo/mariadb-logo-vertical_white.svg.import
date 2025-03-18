@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cn1bwbt7bbe6e"
-path="res://.godot/imported/mariadb-logo-vertical_white.svg-b4b3273e6e2dd9bbea3ce0df0a3d5a3e.ctex"
+path="res://.godot/imported/mariadb-logo-vertical_white.svg-308b177368ed0fd564da2cfb215033ee.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://libs/mariadb-logo-vertical_white.svg"
-dest_files=["res://.godot/imported/mariadb-logo-vertical_white.svg-b4b3273e6e2dd9bbea3ce0df0a3d5a3e.ctex"]
+source_file="res://mariadb-logo-vertical_white.svg"
+dest_files=["res://.godot/imported/mariadb-logo-vertical_white.svg-308b177368ed0fd564da2cfb215033ee.ctex"]
 
 [params]
 
