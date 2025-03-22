@@ -21,13 +21,6 @@ X509Cert/
 *.zst
 *.zip
 
-
-# Godot executables
-*.exe
-*.64
-*.x86_64
-*.app
-
 # Godot-specific ignores
 *.pck
 .import/
@@ -57,6 +50,14 @@ data_*/
 # Binary executables
 *.exe
 a.out
+*.64
+*.x86_64
+*.app
+
+# lib files
+*.dll
+*.so
+*.dylib
 
 # SCons directories and files
 build/
