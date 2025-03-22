@@ -57,6 +57,7 @@ For issues, open a ticket on [GitHub Issues](https://github.com/sigrudds1/Godot-
 
 ## Donations
 If you find this project useful and would like to support development, consider donating:
+- [Patreon](https://www.patreon.com/c/sigrudthetinkerer/membership)
 - [Buy Me a Coffee](https://buymeacoffee.com/VikingTinkerer)
 - [Ko-fi](https://ko-fi.com/vikingtinkerer)
 
