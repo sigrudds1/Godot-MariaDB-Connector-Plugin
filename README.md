@@ -9,7 +9,7 @@ A **GDExtension-based** MariaDB connector for **Godot 4**, allowing direct datab
 ## Features
 - Connect to **MariaDB** databases directly from Godot.
 - Perform queries, insert/update/delete operations, and handle results.
-- Secure authentication with **SHA-1 and Ed25519 password hashing**.
+- MySQL Native(SHA1) and ED25519(SHA512) authentication, **plain or pre-hashed passwords**.
 - Cross-platform support (Linux, Windows, ARM64).
 - Uses **GDExtension**, requiring no custom engine builds.
 
