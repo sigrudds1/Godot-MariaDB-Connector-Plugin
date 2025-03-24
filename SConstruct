@@ -9,7 +9,7 @@ def validate_parent_dir(key, val, env):
         raise UserError("'%s' is not a directory: %s" % (key, os.path.dirname(val)))
 
 libname = "mariadb_connector"
-projectdir = "demo"
+outputdir = "demo/addons/godot-mariadb-connector/bin"
 
 localEnv = Environment(tools=["default"], PLATFORM="")
 
@@ -71,13 +71,13 @@ clean_target = env["target"].replace("template_", "")
 arch_suffix = env.get("arch", "")
 
 # Ensure filename includes lib_, platform, arch (if applicable), and cleaned target type
-file = "lib_{}.{}.{}.{}{}".format(libname, env["platform"], clean_target, arch_suffix, env["SHLIBSUFFIX"])
+file = "libgd_{}.{}.{}.{}{}".format(libname, env["platform"], clean_target, arch_suffix, env["SHLIBSUFFIX"])
 
 if env["platform"] == "macos":
     platlibname = "lib_{}.{}.{}".format(libname, env["platform"], clean_target)
     file = "{}.framework/{}".format(platlibname, platlibname)
 
-libraryfile = "{}/libs/{}".format(projectdir, file)  # Store all output in demo/lib/
+libraryfile = "{}/{}".format(outputdir, file)  # Store all output in demo/lib/
 library = env.SharedLibrary(
     libraryfile,
     source=sources,

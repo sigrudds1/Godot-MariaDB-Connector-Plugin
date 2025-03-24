@@ -127,7 +127,6 @@ private:
 	};
 
 
-
 	const String kAuthTypeNamesStr = "client_ed25519,mysql_native_password";
 	const PackedStringArray kAuthTypeNames = kAuthTypeNamesStr.split(",");
 	bool _dbl_to_string = false;
@@ -258,7 +257,5 @@ public:
 
 VARIANT_ENUM_CAST(MariaDBConnector::AuthType);
 VARIANT_ENUM_CAST(MariaDBConnector::IpType);
-
-
 
 #endif

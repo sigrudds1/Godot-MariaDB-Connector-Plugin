@@ -46,6 +46,20 @@
 
 using namespace godot;
 
+static inline PackedByteArray _sha1(const PackedByteArray &p_data) {
+	PackedByteArray output;
+	output.resize(20);
+
+	mbedtls_sha1_context ctx;
+	mbedtls_sha1_init(&ctx);
+	mbedtls_sha1_starts(&ctx);
+	mbedtls_sha1_update(&ctx, p_data.ptr(), p_data.size());
+	mbedtls_sha1_finish(&ctx, output.ptrw());
+	mbedtls_sha1_free(&ctx);
+
+	return output;
+}
+
 MariaDBConnector::MariaDBConnector() {
 	_stream.instantiate();
 }
@@ -646,8 +660,8 @@ Error MariaDBConnector::connect_db(
 
 	if (p_is_prehashed) {
 		if (_client_auth_type == AUTH_TYPE_MYSQL_NATIVE) {
-			if (!is_valid_hex(p_password, 20)){
-				ERR_PRINT("Password not proper for MySQL Native prehash, must be 20 hex characters!");
+			if (!is_valid_hex(p_password, 40)){
+				ERR_PRINT("Password not proper for MySQL Native prehash, must be 40 hex characters!");
 				return Error::ERR_INVALID_PARAMETER;
 			}
 		} else if (_client_auth_type == AUTH_TYPE_ED25519) {
@@ -705,20 +719,14 @@ PackedByteArray MariaDBConnector::get_client_ed25519_signature(const PackedByteA
 	return rtn_val;
 }
 
-PackedByteArray MariaDBConnector::get_mysql_native_password_hash(PackedByteArray p_sha1_hashed_passwd, PackedByteArray p_srvr_salt) {
+PackedByteArray MariaDBConnector::get_mysql_native_password_hash(
+	PackedByteArray p_sha1_hashed_passwd,
+	PackedByteArray p_srvr_salt) {
     // Per https://mariadb.com/kb/en/connection/#mysql_native_password-plugin
     // Both MariaDB and MySQL support this authentication method
 
     // First SHA1 Hashing
-    PackedByteArray hash;
-    hash.resize(20); // SHA-1 produces a 20-byte output
-
-    mbedtls_sha1_context ctx;
-    mbedtls_sha1_init(&ctx);
-    mbedtls_sha1_starts(&ctx);
-    mbedtls_sha1_update(&ctx, p_sha1_hashed_passwd.ptr(), p_sha1_hashed_passwd.size());
-    mbedtls_sha1_finish(&ctx, hash.ptrw());
-    mbedtls_sha1_free(&ctx);
+    PackedByteArray hash = _sha1(p_sha1_hashed_passwd);
 
     // Combine server salt and hash
     PackedByteArray combined_salt_pwd;
@@ -730,14 +738,7 @@ PackedByteArray MariaDBConnector::get_mysql_native_password_hash(PackedByteArray
     }
 
     // Second SHA1 Hashing
-    PackedByteArray final_hash;
-    final_hash.resize(20);
-
-    mbedtls_sha1_init(&ctx);
-    mbedtls_sha1_starts(&ctx);
-    mbedtls_sha1_update(&ctx, combined_salt_pwd.ptr(), combined_salt_pwd.size());
-    mbedtls_sha1_finish(&ctx, final_hash.ptrw());
-    mbedtls_sha1_free(&ctx);
+    PackedByteArray final_hash = _sha1(combined_salt_pwd);
 
     // XOR original password hash with final hash
     PackedByteArray hash_out;
@@ -1037,3 +1038,4 @@ void MariaDBConnector::set_db_name(String p_dbname) {
 void MariaDBConnector::set_ip_type(IpType p_type) {
 	_ip_type = p_type;
 }
+
