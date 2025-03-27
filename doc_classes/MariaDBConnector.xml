@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="MariaDBConnector" inherits="RefCounted" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>Allows connection to a MariaDB server and running queries from GDScript.</brief_description>
+	<description>MariaDBConnector enables you to connect to a MariaDB server using a TCP connection. You can	send SQL queries, receive results, and manage the connection state directly from GDScript.</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="connect_db">
+			<return type="int" enum="MariaDBConnector.ErrorCode" />
+			<param index="0" name="hostname" type="String" />
+			<param index="1" name="port" type="int" />
+			<param index="2" name="database" type="String" />
+			<param index="3" name="username" type="String" />
+			<param index="4" name="password" type="String" />
+			<param index="5" name="authtype" type="int" enum="MariaDBConnector.AuthType" default="0" />
+			<param index="6" name="is_prehashed" type="bool" default="true" />
+			<description>Establishes a connection to the MariaDB server using the provided host, port, database name, username, and password.</description>
+		</method>
+		<method name="disconnect_db">
+			<return type="void" />
+			<description>Disconnects from the current database session.</description>
+		</method>
+		<method name="get_last_query">
+			<return type="String" />
+			<description>Returns the raw SQL query string from the last executed query.</description>
+		</method>
+		<method name="get_last_query_converted">
+			<return type="PackedByteArray" />
+			<description>Returns the converted form of the last query, suitable for debugging or re-sending.</description>
+		</method>
+		<method name="get_last_response">
+			<return type="PackedByteArray" />
+			<description>Returns the raw response buffer from the last server response.</description>
+		</method>
+		<method name="get_last_transmitted">
+			<return type="PackedByteArray" />
+			<description>Returns the last transmitted packet buffer sent to the server.</description>
+		</method>
+		<method name="is_connected_db">
+			<return type="bool" />
+			<description>Checks if the client is currently connected to a MariaDB server.</description>
+		</method>
+		<method name="query">
+			<return type="Variant" />
+			<param index="0" name="sql_stmt" type="String" />
+			<description>Executes the given SQL statement against the connected database. The result of the query could be ErrorCode or [Array][[Dictionary]], for SELECT only, depending on the statement.</description>
+		</method>
+		<method name="set_db_name">
+			<return type="void" />
+			<param index="0" name="db_name" type="String" />
+			<description>Sets or changes the database name to use for subsequent queries, use if databsae needs to be changed on an established connection.</description>
+		</method>
+		<method name="set_dbl_to_string">
+			<return type="void" />
+			<param index="0" name="is_to_str" type="bool" />
+			<description>If true, floating-point values will be returned as [String] to preserve precision.</description>
+		</method>
+		<method name="set_ip_type">
+			<return type="void" />
+			<param index="0" name="type" type="int" enum="MariaDBConnector.IpType" />
+			<description>Change the IpType for DNS and connections, some networks may require IPV4 or IPV6 specifically.</description>
+		</method>
+	</methods>
+	<constants>
+		<constant name="IP_TYPE_IPV4" value="1" enum="IpType">
+		</constant>
+		<constant name="IP_TYPE_IPV6" value="2" enum="IpType">
+		</constant>
+		<constant name="IP_TYPE_ANY" value="3" enum="IpType">
+		</constant>
+		<constant name="AUTH_TYPE_ED25519" value="0" enum="AuthType">
+		</constant>
+		<constant name="AUTH_TYPE_MYSQL_NATIVE" value="1" enum="AuthType">
+		</constant>
+		<constant name="OK" value="0" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_NO_RESPONSE" value="1" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_NOT_CONNECTED" value="2" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_PACKET_LENGTH_MISMATCH" value="3" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_SERVER_PROTOCOL_INCOMPATIBLE" value="4" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_CLIENT_PROTOCOL_INCOMPATIBLE" value="5" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_SEQUENCE_MISMATCH" value="6" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_AUTH_PLUGIN_NOT_SET" value="7" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_AUTH_PLUGIN_INCOMPATIBLE" value="8" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_AUTH_FAILED" value="9" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_USERNAME_EMPTY" value="10" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_PASSWORD_EMPTY" value="11" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_DB_NAME_EMPTY" value="12" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_PASSWORD_HASH_LENGTH" value="13" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_INVALID_HOSTNAME" value="14" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_CONNECTION_ERROR" value="15" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_INIT_ERROR" value="16" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_UNAVAILABLE" value="17" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_PROTOCOL_MISMATCH" value="18" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_AUTH_PROTOCOL_MISMATCH" value="19" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_SEND_FAILED" value="20" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_INVALID_PORT" value="21" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_UNKNOWN" value="22" enum="ErrorCode">
+		</constant>
+	</constants>
+</class>

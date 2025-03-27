@@ -73,7 +73,7 @@ func _run_db() -> void:
 
 
 func _connect_to_db_srvr(p_auth_type: AuthType) -> void:
-	var err: int = OK
+	var err: int = MariaDBConnector.ErrorCode.OK
 	match p_auth_type:
 		AuthType.NATIVE_PLAIN:
 			err = db.connect_db(

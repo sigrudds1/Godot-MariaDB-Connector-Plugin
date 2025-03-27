@@ -84,9 +84,10 @@ void MariaDBConnector::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_last_response"), &MariaDBConnector::get_last_response);
 	ClassDB::bind_method(D_METHOD("get_last_transmitted"), &MariaDBConnector::get_last_transmitted);
 	ClassDB::bind_method(D_METHOD("is_connected_db"), &MariaDBConnector::is_connected_db);
+	ClassDB::bind_method(D_METHOD("query", "sql_stmt"), &MariaDBConnector::query);
 	ClassDB::bind_method(D_METHOD("set_dbl_to_string", "is_to_str"), &MariaDBConnector::set_dbl_to_string);
 	ClassDB::bind_method(D_METHOD("set_db_name", "db_name"), &MariaDBConnector::set_db_name);
-	ClassDB::bind_method(D_METHOD("query", "sql_stmt"), &MariaDBConnector::query);
+	ClassDB::bind_method(D_METHOD("set_ip_type", "type"), &MariaDBConnector::set_ip_type);
 
 	BIND_ENUM_CONSTANT(IP_TYPE_IPV4);
 	BIND_ENUM_CONSTANT(IP_TYPE_IPV6);
@@ -116,6 +117,7 @@ void MariaDBConnector::_bind_methods() {
 	BIND_ENUM_CONSTANT(ERR_PROTOCOL_MISMATCH);
 	BIND_ENUM_CONSTANT(ERR_AUTH_PROTOCOL_MISMATCH);
 	BIND_ENUM_CONSTANT(ERR_SEND_FAILED);
+	BIND_ENUM_CONSTANT(ERR_INVALID_PORT);
 	BIND_ENUM_CONSTANT(ERR_UNKNOWN);
 
 }
@@ -339,26 +341,23 @@ ErrorCode MariaDBConnector::m_connect() {
 
 	ErrorCode err;
 
-	if (_ip.is_valid_ip_address() && _port > 0) {
-		Error godot_err = _stream->connect_to_host(_ip, _port);
-		switch (godot_err) {
-			case Error::OK:
-				err = ErrorCode::OK;
-				break;
-			case Error::ERR_CANT_CONNECT:
-			case Error::ERR_CONNECTION_ERROR:
-				err = ErrorCode::ERR_CONNECTION_ERROR;
-				break;
-			case Error::ERR_CANT_RESOLVE:
-				err = ErrorCode::ERR_INVALID_HOSTNAME;
-				break;
-			case Error::ERR_INVALID_PARAMETER:
-			default:
-				err = ErrorCode::ERR_INIT_ERROR;
-				break;
-		}
-	} else {
-		err = ErrorCode::ERR_INVALID_HOSTNAME;
+
+	Error godot_err = _stream->connect_to_host(_ip, _port);
+	switch (godot_err) {
+		case Error::OK:
+			err = ErrorCode::OK;
+			break;
+		case Error::ERR_CANT_CONNECT:
+		case Error::ERR_CONNECTION_ERROR:
+			err = ErrorCode::ERR_CONNECTION_ERROR;
+			break;
+		case Error::ERR_CANT_RESOLVE:
+			err = ErrorCode::ERR_INVALID_HOSTNAME;
+			break;
+		case Error::ERR_INVALID_PARAMETER:
+		default:
+			err = ErrorCode::ERR_INIT_ERROR;
+			break;
 	}
 
 	if (err != ErrorCode::OK) {
@@ -689,12 +688,23 @@ ErrorCode MariaDBConnector::connect_db(
 		_ip = IP::get_singleton()->resolve_hostname(p_host, (IP::Type)_ip_type);
 	}
 
-	_port = p_port;
-	// _tcp_polling = false;
-	// _running = true;
+	if (!_ip.is_valid_ip_address()) {
+		ERR_PRINT("Invalid hostname or IP address");
+		return ErrorCode::ERR_INVALID_HOSTNAME;
+	}
 
-	_client_auth_type = p_authtype;
-	_is_pre_hashed = p_is_prehashed;
+	if (p_port <= 0 || p_port > 65535){
+		ERR_PRINT("Invalid port");
+		return ErrorCode::ERR_INVALID_PORT;
+	}
+	_port = p_port;
+
+	if (p_dbname.length() <= 0 && _client_capabilities & (uint64_t)Capabilities::CONNECT_WITH_DB) {
+		ERR_PRINT("dbname not set");
+		return ErrorCode::ERR_DB_NAME_EMPTY;
+	} else {
+		set_db_name(p_dbname);
+	}
 
 	if (p_username.length() <= 0) {
 		ERR_PRINT("username not set");
@@ -706,21 +716,13 @@ ErrorCode MariaDBConnector::connect_db(
 		return ErrorCode::ERR_PASSWORD_EMPTY;
 	}
 
-	if (p_dbname.length() <= 0 && _client_capabilities & (uint64_t)Capabilities::CONNECT_WITH_DB) {
-		ERR_PRINT("dbname not set");
-		return ErrorCode::ERR_DB_NAME_EMPTY;
-	} else {
-		set_db_name(p_dbname);
-	}
-
-
 	if (p_is_prehashed) {
-		if (_client_auth_type == AUTH_TYPE_MYSQL_NATIVE) {
+		if (p_authtype == AUTH_TYPE_MYSQL_NATIVE) {
 			if (!is_valid_hex(p_password, 40)){
 				ERR_PRINT("Password not proper for MySQL Native prehash, must be 40 hex characters!");
 				return ErrorCode::ERR_PASSWORD_HASH_LENGTH;
 			}
-		} else if (_client_auth_type == AUTH_TYPE_ED25519) {
+		} else if (p_authtype == AUTH_TYPE_ED25519) {
 			if (!is_valid_hex(p_password, 128)){
 				ERR_PRINT("Password not proper for ED25519, must be 128 hex characters!");
 				return ErrorCode::ERR_PASSWORD_HASH_LENGTH;
@@ -733,6 +735,8 @@ ErrorCode MariaDBConnector::connect_db(
 		m_update_password(p_password);
 	}
 
+	_client_auth_type = p_authtype;
+	_is_pre_hashed = p_is_prehashed;
 	m_update_username(p_username);
 
 	return m_connect();
