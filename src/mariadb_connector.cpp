@@ -45,6 +45,7 @@
 
 
 using namespace godot;
+using ErrorCode = MariaDBConnector::ErrorCode;
 
 static inline PackedByteArray _sha1(const PackedByteArray &p_data) {
 	PackedByteArray output;
@@ -93,6 +94,30 @@ void MariaDBConnector::_bind_methods() {
 
 	BIND_ENUM_CONSTANT(AUTH_TYPE_MYSQL_NATIVE);
 	BIND_ENUM_CONSTANT(AUTH_TYPE_ED25519);
+
+	BIND_ENUM_CONSTANT(OK);
+	BIND_ENUM_CONSTANT(ERR_NO_RESPONSE);
+	BIND_ENUM_CONSTANT(ERR_NOT_CONNECTED);
+	BIND_ENUM_CONSTANT(ERR_PACKET_LENGTH_MISMATCH);
+	BIND_ENUM_CONSTANT(ERR_SERVER_PROTOCOL_INCOMPATIBLE);
+	BIND_ENUM_CONSTANT(ERR_CLIENT_PROTOCOL_INCOMPATIBLE);
+	BIND_ENUM_CONSTANT(ERR_SEQUENCE_MISMATCH);
+	BIND_ENUM_CONSTANT(ERR_AUTH_PLUGIN_NOT_SET);
+	BIND_ENUM_CONSTANT(ERR_AUTH_PLUGIN_INCOMPATIBLE);
+	BIND_ENUM_CONSTANT(ERR_AUTH_FAILED);
+	BIND_ENUM_CONSTANT(ERR_USERNAME_EMPTY);
+	BIND_ENUM_CONSTANT(ERR_PASSWORD_EMPTY);
+	BIND_ENUM_CONSTANT(ERR_DB_NAME_EMPTY);
+	BIND_ENUM_CONSTANT(ERR_PASSWORD_HASH_LENGTH);
+	BIND_ENUM_CONSTANT(ERR_INVALID_HOSTNAME);
+	BIND_ENUM_CONSTANT(ERR_CONNECTION_ERROR);
+	BIND_ENUM_CONSTANT(ERR_INIT_ERROR);
+	BIND_ENUM_CONSTANT(ERR_UNAVAILABLE);
+	BIND_ENUM_CONSTANT(ERR_PROTOCOL_MISMATCH);
+	BIND_ENUM_CONSTANT(ERR_AUTH_PROTOCOL_MISMATCH);
+	BIND_ENUM_CONSTANT(ERR_SEND_FAILED);
+	BIND_ENUM_CONSTANT(ERR_UNKNOWN);
+
 }
 
 //Custom Functions
@@ -123,7 +148,7 @@ uint32_t MariaDBConnector::m_chk_rcv_bfr(
 }
 
 //client protocol 4.1
-Error MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_type, const PackedByteArray p_srvr_salt) {
+ErrorCode MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_type, const PackedByteArray p_srvr_salt) {
 	PackedByteArray srvr_response;
 	PackedByteArray srvr_auth_msg;
 	uint8_t seq_num = 0;
@@ -255,15 +280,16 @@ Error MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_type, c
 		uint8_t status = srvr_response[itr];
 		if (status == 0x00) {
 			_authenticated = true;
-			return Error::OK;
+			return ErrorCode::OK;
 		} else if (status == 0xFE) {
 			user_auth_type = m_get_server_auth_type(m_find_vbytes_str_at(srvr_response, itr));
 		} else if (status == 0xFF) {
 			m_handle_server_error(srvr_response, itr);
 			_authenticated = false;
-			return Error::ERR_UNAUTHORIZED;
+			return ErrorCode::ERR_AUTH_FAILED;
 		} else {
-			ERR_FAIL_V_EDMSG(Error::ERR_BUG, "Unhandled response code:" + String::num_uint64(srvr_response[itr], 16, true));
+			ERR_FAIL_V_EDMSG(ErrorCode::ERR_UNKNOWN,
+				"Unhandled response code:" + String::num_uint64(srvr_response[itr], 16, true));
 		}
 	}
 
@@ -274,13 +300,16 @@ Error MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_type, c
 		auth_response = get_client_ed25519_signature(_password_hashed, srvr_auth_msg);
 		send_buffer_vec = auth_response;
 	} else {
-		return Error::ERR_INVALID_PARAMETER;
+		return ErrorCode::ERR_AUTH_PROTOCOL_MISMATCH;
 	}
 
 	m_add_packet_header(send_buffer_vec, ++seq_num);
 
 	Error err = _stream->put_data(send_buffer_vec);
-	ERR_FAIL_COND_V_MSG(err != Error::OK, err, "Failed to put data!");
+	if (err != Error::OK) {
+		ERR_PRINT("Failed to put data!");
+		return ErrorCode::ERR_SEND_FAILED; // Or another appropriate value from your enum
+	}
 
 	srvr_response = m_recv_data(1000);
 
@@ -294,28 +323,48 @@ Error MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_type, c
 		} else if (srvr_response[itr] == 0xFF) {
 			m_handle_server_error(srvr_response, itr);
 			_authenticated = false;
-			return Error::ERR_UNAUTHORIZED;
+			return ErrorCode::ERR_AUTH_FAILED;
 		} else {
-			ERR_FAIL_V_MSG(Error::ERR_BUG, "Unhandled response code:" + String::num_uint64(srvr_response[itr], 16, true));
+			ERR_FAIL_V_MSG(ErrorCode::ERR_UNKNOWN,
+					"Unhandled response code:" + String::num_uint64(srvr_response[itr], 16, true));
 		}
 	}
 
-	return Error::OK;
+	return ErrorCode::OK;
 }
 
-Error MariaDBConnector::m_connect() {
+ErrorCode MariaDBConnector::m_connect() {
 
 	disconnect_db();
 
+	ErrorCode err;
 
-	Error err;
 	if (_ip.is_valid_ip_address() && _port > 0) {
-		err = _stream->connect_to_host(_ip, _port);
+		Error godot_err = _stream->connect_to_host(_ip, _port);
+		switch (godot_err) {
+			case Error::OK:
+				err = ErrorCode::OK;
+				break;
+			case Error::ERR_CANT_CONNECT:
+			case Error::ERR_CONNECTION_ERROR:
+				err = ErrorCode::ERR_CONNECTION_ERROR;
+				break;
+			case Error::ERR_CANT_RESOLVE:
+				err = ErrorCode::ERR_INVALID_HOSTNAME;
+				break;
+			case Error::ERR_INVALID_PARAMETER:
+			default:
+				err = ErrorCode::ERR_INIT_ERROR;
+				break;
+		}
 	} else {
-		err = Error::ERR_INVALID_PARAMETER;
+		err = ErrorCode::ERR_INVALID_HOSTNAME;
 	}
 
-	ERR_FAIL_COND_V_MSG(err != Error::OK, err, "Cannot connect to host with IP: " + String(_ip) + " and port: " + itos(_port));
+	if (err != ErrorCode::OK) {
+		ERR_PRINT("Cannot connect to host with IP: " + String(_ip) + " and port: " + itos(_port));
+		return err;
+	}
 
 	for (size_t i = 0; i < 1000; i++) {
 		_stream->poll();
@@ -326,13 +375,16 @@ Error MariaDBConnector::m_connect() {
 		}
 	}
 
-	ERR_FAIL_COND_V_MSG(_stream->get_status() != StreamPeerTCP::STATUS_CONNECTED, Error::ERR_CONNECTION_ERROR,
-			"Cannot connect to host with IP: " + String(_ip) + " and port: " + itos(_port));
+	if (_stream->get_status() != StreamPeerTCP::STATUS_CONNECTED) {
+		ERR_PRINT("TCP connection not established after polling. IP: " + String(_ip) + " Port: " + itos(_port));
+		return ErrorCode::ERR_CONNECTION_ERROR;
+	}
 
 
 	PackedByteArray recv_buffer = m_recv_data(250);
 	if (recv_buffer.size() <= 4) {
-		ERR_FAIL_V_MSG(Error::ERR_UNAVAILABLE, "connect: Recv buffer empty!");
+		ERR_PRINT("connect: Receive buffer empty!");
+		return ErrorCode::ERR_UNAVAILABLE;
 	}
 
 	// per https://mariadb.com/kb/en/connection/
@@ -345,16 +397,19 @@ Error MariaDBConnector::m_connect() {
 	 * byte<n> rcvd_bfr[4] to rcvd_bfr[4 + n] remaining bytes are the packet body n = packet length
 	 */
 
-	uint32_t packet_length = (uint32_t)recv_buffer[0] + ((uint32_t)recv_buffer[1] << 8) +
-			((uint32_t)recv_buffer[2] << 16);
+	 uint32_t packet_length = 	(uint32_t)recv_buffer[0] +
+								((uint32_t)recv_buffer[1] << 8) +
+								((uint32_t)recv_buffer[2] << 16);
 	// On initial connect the packet length should be 4 byte less than buffer length
 	if (packet_length != ((uint32_t)recv_buffer.size() - 4)) {
-		ERR_FAIL_V_MSG(Error::FAILED, "Recv bfr does not match expected size!");
+		ERR_PRINT("Receive buffer does not match expected size!");
+		return ErrorCode::ERR_PACKET_LENGTH_MISMATCH;
 	}
 
 	// 4th byte is sequence number, increment this when replying with login request, if client starts then start at 0
 	if (recv_buffer[3] != 0) {
-		ERR_FAIL_V_MSG(Error::FAILED, "Packet sequence error!");
+		ERR_PRINT("Packet sequence error!");
+		return ErrorCode::ERR_SEQUENCE_MISMATCH;
 	}
 
 	// From the 5th byte on is the packet body
@@ -365,13 +420,14 @@ Error MariaDBConnector::m_connect() {
 	if (recv_buffer[4] == 10) {
 		m_server_init_handshake_v10(recv_buffer);
 	} else {
-		ERR_FAIL_V_MSG(Error::FAILED, "Protocol version incompatible!");
+		ERR_PRINT("Unsupported protocol version in handshake packet!");
+		return ErrorCode::ERR_PROTOCOL_MISMATCH;
 	}
 
 	// Passing as lambda so external non-static members can be accessed
 	// _tcp_thread = std::thread([this] { m_tcp_thread_func(); });
 
-	return Error::OK;
+	return ErrorCode::OK;
 } //m_connect
 
 
@@ -501,7 +557,7 @@ size_t MariaDBConnector::m_get_pkt_len_at(const PackedByteArray p_src_buf, size_
 	return len;
 }
 
-Error MariaDBConnector::m_server_init_handshake_v10(const PackedByteArray &p_src_buffer) {
+ErrorCode MariaDBConnector::m_server_init_handshake_v10(const PackedByteArray &p_src_buffer) {
 
 	//nul string - read the 5th byte until the first nul(00), this is server version string, it is nul terminated
 	size_t pkt_itr = 3;
@@ -550,11 +606,11 @@ Error MariaDBConnector::m_server_init_handshake_v10(const PackedByteArray &p_src
 	_server_capabilities += ((uint64_t)p_src_buffer[++pkt_itr]) << 24;
 
 	if (!(_server_capabilities & (uint64_t)Capabilities::CLIENT_PROTOCOL_41)) {
-		ERR_FAIL_V_MSG(Error::FAILED, "Incompatible authorization protocol!");
+		ERR_FAIL_V_MSG(ErrorCode::ERR_AUTH_PROTOCOL_MISMATCH, "Incompatible authorization protocol!");
 	}
 	//TODO(sigrudds1) Make auth plugin not required if using ssl/tls
 	if (!(_server_capabilities & (uint64_t)Capabilities::PLUGIN_AUTH)) {
-		ERR_FAIL_V_MSG(Error::FAILED, "Authorization protocol not set!");
+		ERR_FAIL_V_MSG(ErrorCode::ERR_AUTH_PROTOCOL_MISMATCH, "Authorization protocol not set!");
 	}
 
 	//1byte - salt length 0 for none
@@ -615,7 +671,7 @@ void MariaDBConnector::m_update_username(String p_username) {
 }
 
 //public
-Error MariaDBConnector::connect_db(
+ErrorCode MariaDBConnector::connect_db(
 		String p_host,
 		int p_port,
 		String p_dbname,
@@ -642,17 +698,17 @@ Error MariaDBConnector::connect_db(
 
 	if (p_username.length() <= 0) {
 		ERR_PRINT("username not set");
-		return Error::ERR_INVALID_PARAMETER;
+		return ErrorCode::ERR_USERNAME_EMPTY;
 	}
 
 	if (p_password.length() <= 0) {
 		ERR_PRINT("password not set");
-		return Error::ERR_INVALID_PARAMETER;
+		return ErrorCode::ERR_PASSWORD_EMPTY;
 	}
 
 	if (p_dbname.length() <= 0 && _client_capabilities & (uint64_t)Capabilities::CONNECT_WITH_DB) {
 		ERR_PRINT("dbname not set");
-		return Error::ERR_INVALID_PARAMETER;
+		return ErrorCode::ERR_DB_NAME_EMPTY;
 	} else {
 		set_db_name(p_dbname);
 	}
@@ -662,12 +718,12 @@ Error MariaDBConnector::connect_db(
 		if (_client_auth_type == AUTH_TYPE_MYSQL_NATIVE) {
 			if (!is_valid_hex(p_password, 40)){
 				ERR_PRINT("Password not proper for MySQL Native prehash, must be 40 hex characters!");
-				return Error::ERR_INVALID_PARAMETER;
+				return ErrorCode::ERR_PASSWORD_HASH_LENGTH;
 			}
 		} else if (_client_auth_type == AUTH_TYPE_ED25519) {
 			if (!is_valid_hex(p_password, 128)){
 				ERR_PRINT("Password not proper for ED25519, must be 128 hex characters!");
-				return Error::ERR_INVALID_PARAMETER;
+				return ErrorCode::ERR_PASSWORD_HASH_LENGTH;
 			}
 		}
 		_password_hashed = hex_str_to_bytes(p_password);

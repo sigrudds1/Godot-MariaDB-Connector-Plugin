@@ -64,20 +64,30 @@ public:
 		IP_TYPE_ANY = IP::TYPE_ANY,
 	};
 
-	enum ErrorCodes {
+	enum ErrorCode : int64_t{
 		OK = 0,
 		ERR_NO_RESPONSE,
 		ERR_NOT_CONNECTED,
 		ERR_PACKET_LENGTH_MISMATCH,
-		ERR_PACKET_SEQUENCE_ERROR,
 		ERR_SERVER_PROTOCOL_INCOMPATIBLE,
 		ERR_CLIENT_PROTOCOL_INCOMPATIBLE,
+		ERR_SEQUENCE_MISMATCH,
 		ERR_AUTH_PLUGIN_NOT_SET,
 		ERR_AUTH_PLUGIN_INCOMPATIBLE,
 		ERR_AUTH_FAILED,
 		ERR_USERNAME_EMPTY,
 		ERR_PASSWORD_EMPTY,
-		ERR_DB_EMPTY
+		ERR_DB_NAME_EMPTY,
+		ERR_PASSWORD_HASH_LENGTH,
+		ERR_INVALID_HOSTNAME,
+		ERR_CONNECTION_ERROR,
+		ERR_INIT_ERROR,
+		ERR_UNAVAILABLE,
+		ERR_PROTOCOL_MISMATCH,
+		ERR_AUTH_PROTOCOL_MISMATCH,
+		ERR_SEND_FAILED,
+		ERR_UNKNOWN
+
 	};
 
 private:
@@ -174,8 +184,8 @@ private:
 
 	uint32_t m_chk_rcv_bfr(PackedByteArray &bfr, int &bfr_size, const size_t cur_pos, const size_t need);
 
-	Error m_client_protocol_v41(const AuthType p_srvr_auth_type, const PackedByteArray p_srvr_salt);
-	Error m_connect();
+	ErrorCode m_client_protocol_v41(const AuthType p_srvr_auth_type, const PackedByteArray p_srvr_salt);
+	ErrorCode m_connect();
 
 	String m_find_vbytes_str_at(PackedByteArray p_buf, size_t &p_start_pos);
 	String m_find_vbytes_str(PackedByteArray p_buf);
@@ -188,7 +198,7 @@ private:
 	PackedByteArray m_recv_data(uint32_t p_timeout);
 	//TODO(sigrudds1) Add error log file using the username in the filename
 	void m_handle_server_error(const PackedByteArray p_src_buffer, size_t &p_last_pos);
-	Error m_server_init_handshake_v10(const PackedByteArray &p_src_buffer);
+	ErrorCode m_server_init_handshake_v10(const PackedByteArray &p_src_buffer);
 	void m_update_password(String p_password);
 	void m_update_username(String P_username);
 
@@ -224,7 +234,7 @@ public:
 	 * \param is_pre_hash	bool if set the password used will be hashed by the required type before used.
 	 * \return 				uint32_t 0 = no error, see error enum class ErrorCode
 	 */
-	Error connect_db(String host, int port, String dbname, String username, String password,
+	ErrorCode connect_db(String host, int port, String dbname, String username, String password,
 			AuthType auth_type = AuthType::AUTH_TYPE_ED25519, bool is_prehashed = true);
 
 	void disconnect_db();
@@ -257,5 +267,6 @@ public:
 
 VARIANT_ENUM_CAST(MariaDBConnector::AuthType);
 VARIANT_ENUM_CAST(MariaDBConnector::IpType);
+VARIANT_ENUM_CAST(MariaDBConnector::ErrorCode);
 
 #endif
