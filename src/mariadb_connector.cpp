@@ -679,12 +679,9 @@ ErrorCode MariaDBConnector::connect_db(
 		AuthType p_authtype,
 		bool p_is_prehashed) {
 
-	if (p_host.is_valid_ip_address())
-	{
+	if (p_host.is_valid_ip_address()){
 		_ip = p_host;
-	}
-	else
-	{
+	} else {
 		_ip = IP::get_singleton()->resolve_hostname(p_host, (IP::Type)_ip_type);
 	}
 
@@ -729,9 +726,7 @@ ErrorCode MariaDBConnector::connect_db(
 			}
 		}
 		_password_hashed = hex_str_to_bytes(p_password);
-	}
-	else
-	{
+	} else {
 		m_update_password(p_password);
 	}
 
