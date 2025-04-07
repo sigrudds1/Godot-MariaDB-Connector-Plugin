@@ -10,6 +10,7 @@ A **GDExtension-based** MariaDB connector for **Godot 4**, allowing direct datab
 - Connect to **MariaDB** databases directly from Godot.
 - Perform queries, insert/update/delete operations, and handle results.
 - MySQL Native(SHA1) and ED25519(SHA512) authentication, **plain or pre-hashed passwords**.
+- Argon2 slow hash Argon2Hasher class wrapper, with high entropy salt generation.
 - Cross-platform support (Linux, Windows, ARM64).
 - Uses **GDExtension**, requiring no custom engine builds.
 
@@ -61,3 +62,5 @@ If you find this project useful and would like to support development, consider 
 - [Buy Me a Coffee](https://buymeacoffee.com/VikingTinkerer)
 - [Ko-fi](https://ko-fi.com/vikingtinkerer)
 
+## Version Updates
+v1.2 - Added PHC Winner Argon2 slow hash and mbedtls based hgigh entropy salt generation that uses the salt length property.
