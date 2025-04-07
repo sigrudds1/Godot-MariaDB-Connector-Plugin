@@ -30,6 +30,7 @@
 
 #include "register_types.h"
 #include "mariadb_connector.hpp"
+#include "argon2_hasher.hpp"
 
 #include <gdextension_interface.h>
 
@@ -41,7 +42,7 @@ void initialize_mariadb_connector(ModuleInitializationLevel p_level) {
 	}
 
 	GDREGISTER_CLASS(MariaDBConnector);
-	// ClassDB::register_class<MariaDBConnector>();
+	GDREGISTER_CLASS(Argon2Hasher);
 }
 
 void uninitialize_mariadb_connector(ModuleInitializationLevel p_level) {
