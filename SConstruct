@@ -45,7 +45,7 @@ compilation_db = env.CompilationDatabase(
 )
 env.Alias("compiledb", compilation_db)
 
-env = SConscript("godot-cpp/SConstruct", {"env": env, "customs": customs})
+env = SConscript("src/godot-cpp/SConstruct", {"env": env, "customs": customs})
 
 if env["platform"] == "windows":
     env.Append(LIBS=["ws2_32", "bcrypt"])  # Link Windows networking and bcrypt
@@ -56,10 +56,23 @@ env.Append(CPPPATH=[
     "src/ed25519_ref10",
     "src/mbedtls/include",
     "src/mbedtls/include/mbedtls",
-    "src/mbedtls/include/psa"
+    "src/mbedtls/include/psa",
+    "src/argon2/",
+    "src/argon2/blake2"
 ])
 
 sources = Glob("src/*.cpp") + Glob("src/ed25519_ref10/*.cpp") + Glob("src/mbedtls/library/*.c")
+
+argon2_sources = [
+    "src/argon2/argon2.c",
+    "src/argon2/core.c",
+    "src/argon2/encoding.c",
+    "src/argon2/thread.c",
+    "src/argon2/opt.c",
+    "src/argon2/blake2/blake2b.c"
+]
+
+sources += [env.File(f) for f in argon2_sources]
 
 if env["target"] in ["editor", "template_debug"]:
 	try:

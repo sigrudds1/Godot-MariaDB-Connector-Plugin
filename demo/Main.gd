@@ -41,6 +41,11 @@ func _ready() -> void:
 #	_insert_many_columns() 
 #	_insert_many_records()
 	_run_db()
+	
+	var hasher := Argon2Hasher.new()
+	var salt: String = hasher.generate_b64_salt()
+	var hashed: String = hasher.hash_password_with_salt("secret", salt)
+	print("argon2 hash: %s" % hashed)
 
 
 func _exit_tree() -> void:
