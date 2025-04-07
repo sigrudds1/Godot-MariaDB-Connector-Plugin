@@ -151,6 +151,7 @@ uint32_t MariaDBConnector::m_chk_rcv_bfr(
 
 //client protocol 4.1
 ErrorCode MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_type, const PackedByteArray p_srvr_salt) {
+
 	PackedByteArray srvr_response;
 	PackedByteArray srvr_auth_msg;
 	uint8_t seq_num = 0;
@@ -337,6 +338,7 @@ ErrorCode MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_typ
 
 ErrorCode MariaDBConnector::m_connect() {
 
+
 	disconnect_db();
 
 	ErrorCode err;
@@ -379,7 +381,6 @@ ErrorCode MariaDBConnector::m_connect() {
 		return ErrorCode::ERR_CONNECTION_ERROR;
 	}
 
-
 	PackedByteArray recv_buffer = m_recv_data(250);
 	if (recv_buffer.size() <= 4) {
 		ERR_PRINT("connect: Receive buffer empty!");
@@ -416,6 +417,7 @@ ErrorCode MariaDBConnector::m_connect() {
 	/* 5th byte is protocol version, currently only 10 for MariaDBConnector and MySQL v3.21.0+,
 	 * protocol version 9 for older MySQL versions.
 	 */
+
 	if (recv_buffer[4] == 10) {
 		m_server_init_handshake_v10(recv_buffer);
 	} else {
@@ -646,10 +648,7 @@ ErrorCode MariaDBConnector::m_server_init_handshake_v10(const PackedByteArray &p
 	return m_client_protocol_v41(p_srvr_auth_type, server_salt);
 } //server_init_handshake_v10
 
-void MariaDBConnector::m_update_password(String p_password) {
-	if (_is_pre_hashed)
-		return;
-
+void MariaDBConnector::m_hash_password(String p_password) {
 	// Store password as a hash, only the hash is needed
 	if (_client_auth_type == AUTH_TYPE_MYSQL_NATIVE) {
 		_password_hashed = p_password.sha1_buffer();
@@ -713,6 +712,7 @@ ErrorCode MariaDBConnector::connect_db(
 		return ErrorCode::ERR_PASSWORD_EMPTY;
 	}
 
+
 	if (p_is_prehashed) {
 		if (p_authtype == AUTH_TYPE_MYSQL_NATIVE) {
 			if (!is_valid_hex(p_password, 40)){
@@ -727,13 +727,13 @@ ErrorCode MariaDBConnector::connect_db(
 		}
 		_password_hashed = hex_str_to_bytes(p_password);
 	} else {
-		m_update_password(p_password);
+		m_hash_password(p_password);
 	}
 
-	_client_auth_type = p_authtype;
-	_is_pre_hashed = p_is_prehashed;
+
 	m_update_username(p_username);
 
+	_client_auth_type = p_authtype;
 	return m_connect();
 }
 
@@ -782,8 +782,7 @@ PackedByteArray MariaDBConnector::get_mysql_native_password_hash(
 
     // First SHA1 Hashing
     PackedByteArray hash = _sha1(p_sha1_hashed_passwd);
-
-    // Combine server salt and hash
+	// Combine server salt and hash
     PackedByteArray combined_salt_pwd;
     combined_salt_pwd.resize(40); // 20-byte salt + 20-byte hash
 
@@ -794,7 +793,6 @@ PackedByteArray MariaDBConnector::get_mysql_native_password_hash(
 
     // Second SHA1 Hashing
     PackedByteArray final_hash = _sha1(combined_salt_pwd);
-
     // XOR original password hash with final hash
     PackedByteArray hash_out;
     hash_out.resize(20);
@@ -802,6 +800,7 @@ PackedByteArray MariaDBConnector::get_mysql_native_password_hash(
     for (int i = 0; i < 20; i++) {
         hash_out.set(i, p_sha1_hashed_passwd[i] ^ final_hash[i]);
     }
+
 
     return hash_out;
 }

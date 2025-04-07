@@ -143,7 +143,6 @@ private:
 	bool _dbl_to_string = false;
 	IpType _ip_type = IpType::IP_TYPE_ANY;
 	AuthType _client_auth_type = AUTH_TYPE_ED25519;
-	bool _is_pre_hashed = true;
 	bool _authenticated = false;
 	uint64_t _client_capabilities = 0;
 	uint64_t _server_capabilities = 0;
@@ -200,7 +199,7 @@ private:
 	//TODO(sigrudds1) Add error log file using the username in the filename
 	void m_handle_server_error(const PackedByteArray p_src_buffer, size_t &p_last_pos);
 	ErrorCode m_server_init_handshake_v10(const PackedByteArray &p_src_buffer);
-	void m_update_password(String p_password);
+	void m_hash_password(String p_password);
 	void m_update_username(String P_username);
 
 	static inline bool is_valid_hex(const String &p_string, int expected_length = 0) {
