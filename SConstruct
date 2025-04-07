@@ -68,9 +68,17 @@ argon2_sources = [
     "src/argon2/core.c",
     "src/argon2/encoding.c",
     "src/argon2/thread.c",
-    "src/argon2/opt.c",
     "src/argon2/blake2/blake2b.c"
 ]
+
+# Detect architecture suffix for ARM64 builds
+arch_suffix = env.get("arch", "")
+
+if arch_suffix not in ["aarch64", "arm64"]:
+    argon2_sources.append("src/argon2/opt.c")  # only include opt.c on x86
+else:
+    print("Skipping opt.c for ARM64 (no SSE)")
+
 
 sources += [env.File(f) for f in argon2_sources]
 
@@ -89,9 +97,6 @@ if env["arch"] == "arm64":
 
 # Strip "template_" from target name if present
 clean_target = env["target"].replace("template_", "")
-
-# Detect architecture suffix for ARM64 builds
-arch_suffix = env.get("arch", "")
 
 # Ensure filename includes lib_, platform, arch (if applicable), and cleaned target type
 file = "libgd_{}.{}.{}.{}{}".format(libname, env["platform"], clean_target, arch_suffix, env["SHLIBSUFFIX"])
