@@ -81,6 +81,8 @@ if env["target"] in ["editor", "template_debug"]:
 	except AttributeError:
 		print("Not including class reference as we're targeting a pre-4.3 baseline.")
 
+if env["arch"] == "arm64":
+    env.Append(CCFLAGS=["-DARGON2_NO_OPT"])
 
 # Remove "lib" prefix from the shared library file
 # env["SHLIBPREFIX"] = ""
