@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="MariaDBConnector" inherits="RefCounted" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>Allows connection to a MariaDB server and running queries from GDScript.</brief_description>
-	<description>MariaDBConnector enables you to connect to a MariaDB server using a TCP connection. You can	send SQL queries, receive results, and manage the connection state directly from GDScript.</description>
+	<description>MariaDBConnector enables you to connect to a MariaDB server using a TCP connection. You can send SQL queries, receive results, and manage the connection state directly from GDScript.</description>
 	<tutorials>
 	</tutorials>
 	<methods>
