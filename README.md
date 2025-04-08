@@ -4,7 +4,7 @@
   <img src="demo/addons/godot-mariadb-connector/godot-mariadb-connector.png" alt="MariaDB Connector" />
 </p>
 
-A **GDExtension-based** MariaDB connector for **Godot 4**, allowing direct database access from Godot without relying on third-party middleware.
+A **GDExtension-based** MariaDB connector for **Godot 4**(4.3+), allowing direct database access from Godot without relying on third-party middleware.
 
 ## Features
 - Connect to **MariaDB** databases directly from Godot.
@@ -17,20 +17,17 @@ A **GDExtension-based** MariaDB connector for **Godot 4**, allowing direct datab
 ## Installation
 ### Download the Addon from the Godot editor AssetLib tab.
 or
-### 1. Download the Addon
-Clone or download the repository:
-```sh
-git clone https://github.com/sigrudds1/Godot-MariaDB-Connector-Plugin.git
-```
-Or download the latest release from **[Releases](https://github.com/sigrudds1/Godot-MariaDB-Connector-Plugin/releases)**.
+### 1. Download the Addon from Github
+Download  `addon.zip` from the latest release.
 
 ### 2. Add to Your Godot Project
-Move the **`addons/mariadb_connector/`** folder into your project's directory.
+Move the uncompressed **`addons/mariadb_connector/`** folder into your project's directory.
 
 ### 3. GDExtension Auto-Detection
-Since this is a **GDExtension**, it does **not** require enabling in the Godot plugin settings. Once the files are in place, Godot will automatically detect and load the extension.
+It appears **GDExtension** binaries do **not** require enabling in the Godot plugin settings. Once the files are in place, Godot will automatically detect and load the extension.
 
-*(Note: the AssetLib does not update the addon automatically, requires closing the project, deleting the `<project>/addons/mariadb_connector/` folder and reinstallation.)*
+(Note: The AssetLib does not update the addon automatically. Updating requires closing the project, deleting the `<project>/addons/mariadb_connector/` folder, only the `mariadb_connector/` folder itself is required, and reinstallation.
+AssetLib addons require moderator approval, the AssetLib version may be behind releases.)
 
 ## Usage
 For detailed usage examples, please refer to the **Demo Project** included in the repository.
@@ -67,7 +64,8 @@ If you find this project useful and would like to support development, consider 
 
 ## Version Updates
 v1.2.1 - Added authtyoe description to editor docs.
-v1.2   - Added PHC Winner Argon2 slow hash and mbedtls based high entropy salt generation that uses the salt length property.
+
+v1.2.0 - Added PHC Winner Argon2 slow hash and mbedtls based high entropy salt generation that uses the salt length property.
 
 ## Bug Fixes
-v1.2   - Zapped reintroduced prehash = false bug, for good this time.
+v1.2.0 - Zapped reintroduced prehash = false bug, for good this time.
