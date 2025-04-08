@@ -63,4 +63,7 @@ If you find this project useful and would like to support development, consider 
 - [Ko-fi](https://ko-fi.com/vikingtinkerer)
 
 ## Version Updates
-v1.2 - Added PHC Winner Argon2 slow hash and mbedtls based hgigh entropy salt generation that uses the salt length property.
+v1.2 - Added PHC Winner Argon2 slow hash and mbedtls based high entropy salt generation that uses the salt length property.
+
+## Bug Fixes
+v1.2 - Reintroduced prehash = false bug has been zapped.
