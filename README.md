@@ -63,6 +63,8 @@ If you find this project useful and would like to support development, consider 
 - [Ko-fi](https://ko-fi.com/vikingtinkerer)
 
 ## Version Updates
+v1.2.2 - Added buffer checks and timeout property to compensate for slower MariaDB servers on Rasberry Pi SD card installed OS.
+
 v1.2.1 - Added authtype description to editor docs.
 
 v1.2.0 - Added PHC Winner Argon2 slow hash and mbedtls based high entropy salt generation that uses the salt length property.
