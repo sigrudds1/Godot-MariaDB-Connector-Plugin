@@ -95,24 +95,24 @@ private:
 	//https://mariadb.com/kb/en/connection/#capabilities
 	enum class Capabilities : uint64_t {
 		LONG_PASSWORD = (1ULL << 0), //MySQL
-		CLIENT_MYSQL = (1ULL << 0), //MariaDBConnector - lets server know this is a mysql client
+		CLIENT_MYSQL = (1ULL << 0), //MariaDB - lets server know this is a mysql client
 		FOUND_ROWS = (1ULL << 1),
-		LONG_FLAG = (1ULL << 2), //Not listed in MariaDBConnector
+		LONG_FLAG = (1ULL << 2), //Not listed in MariaDB
 		CONNECT_WITH_DB = (1ULL << 3),
-		NO_SCHEMA = (1ULL << 4), //Not listed in MariaDBConnector
-		NO_DB_TABLE_COLUMN = (1ULL << 4), //Alternate name, Not listed in MariaDBConnector
+		NO_SCHEMA = (1ULL << 4), //Not listed in MariaDB
+		NO_DB_TABLE_COLUMN = (1ULL << 4), //Alternate name, Not listed in MariaDB
 		COMPRESS = (1ULL << 5),
-		ODBC = (1ULL << 6), //Not listed in MariaDBConnector
+		ODBC = (1ULL << 6), //Not listed in MariaDB
 		LOCAL_FILES = (1ULL << 7),
 		IGNORE_SPACE = (1ULL << 8),
 		CLIENT_PROTOCOL_41 = (1ULL << 9),
 		CLIENT_INTERACTIVE = (1ULL << 10),
 		SSL = (1ULL << 11),
 		IGNORE_SIGPIPE = (1ULL << 12), //MySQL
-		TRANSACTIONS_MARIA = (1ULL << 12), //MariaDBConnector
+		TRANSACTIONS_MARIA = (1ULL << 12), //MariaDB
 		TRANSACTIONS_MYSQL = (1ULL << 13), //MySQL
-		SECURE_CONNECTION = (1ULL << 13), //MariaDBConnector
-		RESERVED = (1ULL << 14), //Not listed in MariaDBConnector
+		SECURE_CONNECTION = (1ULL << 13), //MariaDB
+		RESERVED = (1ULL << 14), //Not listed in MariaDB
 		RESERVED2 = (1ULL << 15), //Not in Maria Docs but needed
 		MULTI_STATEMENTS = (1ULL << 16),
 		MULTI_RESULTS = (1ULL << 17),
@@ -120,16 +120,16 @@ private:
 		PLUGIN_AUTH = (1ULL << 19),
 		CLIENT_SEND_CONNECT_ATTRS = (1ULL << 20),
 		PLUGIN_AUTH_LENENC_CLIENT_DATA = (1ULL << 21), //TODO Add compatibility
-		CAN_HANDLE_EXPIRED_PASSWORDS = (1ULL << 22), //Not listed in MariaDBConnector
+		CAN_HANDLE_EXPIRED_PASSWORDS = (1ULL << 22), //Not listed in MariaDB
 		SESSION_TRACK = (1ULL << 23),
 		CLIENT_DEPRECATE_EOF = (1ULL << 24),
 		OPTIONAL_RESULTSET_METADATA = (1ULL << 25),
 		CLIENT_ZSTD_COMPRESSION_ALGORITHM = (1ULL << 26),
-		CLIENT_QUERY_ATTRIBUTES = (1ULL << 27), //Not listed in MariaDBConnector
+		CLIENT_QUERY_ATTRIBUTES = (1ULL << 27), //Not listed in MariaDB
 		//NOT_USED = (1ULL << 28),
-		CLIENT_CAPABILITY_EXTENSION = (1ULL << 29), //MariaDBConnector reserved for future use.
-		SSL_VERIFY_SERVER_CERT = (1ULL << 30), //Not listed in MariaDBConnector
-		REMEMBER_OPTIONS = (1ULL << 31), //Not listed in MariaDBConnector
+		CLIENT_CAPABILITY_EXTENSION = (1ULL << 29), //MariaDB reserved for future use.
+		SSL_VERIFY_SERVER_CERT = (1ULL << 30), //Not listed in MariaDB
+		REMEMBER_OPTIONS = (1ULL << 31), //Not listed in MariaDB
 		MARIADB_CLIENT_PROGRESS = (1ULL << 32),
 		MARIADB_CLIENT_COM_MULTI = (1ULL << 33),
 		MARIADB_CLIENT_STMT_BULK_OPERATIONS = (1ULL << 34),
@@ -183,7 +183,7 @@ private:
 	// void m_append_thread_data(PackedByteArray &p_data, const uint64_t p_timeout = 1000);
 	// void m_tcp_thread_func();
 
-	uint32_t m_chk_rcv_bfr(PackedByteArray &bfr, int &bfr_size, const size_t cur_pos, const size_t bvytes_needed);
+	uint32_t m_chk_rcv_bfr(PackedByteArray &bfr, int &bfr_size, const size_t cur_pos, const size_t bytes_needed);
 
 	ErrorCode m_client_protocol_v41(const AuthType p_srvr_auth_type, const PackedByteArray p_srvr_salt);
 	ErrorCode m_connect();

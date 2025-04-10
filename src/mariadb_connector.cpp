@@ -41,9 +41,6 @@
 #include <godot_cpp/variant/utility_functions.hpp>
 
 
-// #include <godot_cpp/variant/utility_functions.hpp>
-
-
 using namespace godot;
 using ErrorCode = MariaDBConnector::ErrorCode;
 
@@ -153,8 +150,8 @@ uint32_t MariaDBConnector::m_chk_rcv_bfr(
 //client protocol 4.1
 ErrorCode MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_type, const PackedByteArray p_srvr_salt) {
 
-	PackedByteArray srvr_response;
-	PackedByteArray srvr_auth_msg;
+	PackedByteArray srvr_response_pba;
+	PackedByteArray srvr_auth_msg_pba;
 	uint8_t seq_num = 0;
 	AuthType user_auth_type = AUTH_TYPE_ED25519;
 
@@ -170,7 +167,7 @@ ErrorCode MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_typ
 	_client_capabilities |= (uint64_t)Capabilities::CLIENT_INTERACTIVE;
 	_client_capabilities |= (uint64_t)Capabilities::SECURE_CONNECTION;
 
-	// Not listed in MariaDBConnector docs but if not set it won't parse the stream correctly
+	// Not listed in MariaDB docs but if not set it won't parse the stream correctly
 	_client_capabilities |= (uint64_t)Capabilities::RESERVED2;
 
 	_client_capabilities |= (uint64_t)Capabilities::MULTI_STATEMENTS;
@@ -187,23 +184,24 @@ ErrorCode MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_typ
 	_client_capabilities |= (uint64_t)Capabilities::REMEMBER_OPTIONS; //??
 
 	// Only send the first 4 bytes(32 bits) of capabilities the remaining will be sent later in another 4 byte
-	PackedByteArray send_buffer_vec = little_endian_to_vbytes(_client_capabilities, 4);
+	PackedByteArray send_buffer_pba = little_endian_to_vbytes(_client_capabilities, 4);
 	// printf("_client_cap %ld", _client_capabilities);
 
 	// int<4> max packet size
 	// temp_vec = little_endian_bytes((uint32_t)0x40000000, 4);
 	// send_buffer_vec.insert(send_buffer_vec.end(), temp_vec.begin(), temp_vec.end());
-	send_buffer_vec.append_array(little_endian_to_vbytes((uint32_t)0x40000000, 4));
+	send_buffer_pba.append_array(little_endian_to_vbytes((uint32_t)0x40000000, 4));
 
+	//TODO Find Collation list, create enum and setter
 	// int<1> client character collation
-	send_buffer_vec.push_back(33); //utf8_general_ci
+	send_buffer_pba.push_back(33); //utf8_general_ci
 
 	// string<19> reserved
 	// send_buffer_vec.insert(send_buffer_vec.end(), 19, 0);
-	PackedByteArray temp_vec;
-	temp_vec.resize(19);
-	temp_vec.fill(0);
-	send_buffer_vec.append_array(temp_vec);
+	PackedByteArray temp_pba;
+	temp_pba.resize(19);
+	temp_pba.fill(0);
+	send_buffer_pba.append_array(temp_pba);
 
 	if (!(_server_capabilities & (uint64_t)Capabilities::CLIENT_MYSQL) && _srvr_major_ver >= 10 &&
 			_srvr_minor_ver >= 2) {
@@ -216,24 +214,22 @@ ErrorCode MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_typ
 		// we need the metadata in the stream so we can form the dictionary ??
 		_client_capabilities |= (_server_capabilities & (uint64_t)Capabilities::MARIADB_CLIENT_CACHE_METADATA);
 		// int<4> extended client capabilities
-		temp_vec = little_endian_to_vbytes(_client_capabilities, 4, 4);
-		send_buffer_vec.append_array(temp_vec);
+		temp_pba = little_endian_to_vbytes(_client_capabilities, 4, 4);
+		send_buffer_pba.append_array(temp_pba);
 	} else {
 		// string<4> reserved
-		temp_vec.resize(4);
-		temp_vec.fill(0);
-		send_buffer_vec.append_array(temp_vec);
+		temp_pba.resize(4);
+		temp_pba.fill(0);
+		send_buffer_pba.append_array(temp_pba);
 	}
 
 	// string<NUL> username
-	//send_buffer_vec.insert(send_buffer_vec.end(), _username.begin(), _username.end());
-	send_buffer_vec.append_array(_username);
-	send_buffer_vec.push_back(0); //NUL terminated
+	send_buffer_pba.append_array(_username);
+	send_buffer_pba.push_back(0); //NUL terminated
 
-	PackedByteArray auth_response;
+	PackedByteArray auth_response_pba;
 	if (p_srvr_auth_type == AUTH_TYPE_MYSQL_NATIVE && (_client_auth_type == AUTH_TYPE_MYSQL_NATIVE)) {
-		// print_line("Using MySQL Native Password");
-		auth_response = get_mysql_native_password_hash(_password_hashed, p_srvr_salt);
+		auth_response_pba = get_mysql_native_password_hash(_password_hashed, p_srvr_salt);
 	}
 
 	// if (server_capabilities & PLUGIN_AUTH_LENENC_CLIENT_DATA)
@@ -242,27 +238,27 @@ ErrorCode MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_typ
 	if (!(_server_capabilities & (uint64_t)Capabilities::CLIENT_MYSQL) &&
 			(_server_capabilities & (uint64_t)Capabilities::SECURE_CONNECTION)) {
 		//int<1> length of authentication response
-		send_buffer_vec.push_back((uint8_t)auth_response.size());
+		send_buffer_pba.push_back((uint8_t)auth_response_pba.size());
 		//string<fix> authentication response
-		send_buffer_vec.append_array(auth_response);
+		send_buffer_pba.append_array(auth_response_pba);
 	} else {
 		//else string<NUL> authentication response null ended
-		send_buffer_vec.append_array(auth_response);
-		send_buffer_vec.push_back(0); //NUL terminated
+		send_buffer_pba.append_array(auth_response_pba);
+		send_buffer_pba.push_back(0); //NUL terminated
 	}
 
 	// if (server_capabilities & CLIENT_CONNECT_WITH_DB)
 	// string<NUL> default database name
 	if (_client_capabilities & (uint64_t)Capabilities::CONNECT_WITH_DB) {
-		send_buffer_vec.append_array(_dbname);
-		send_buffer_vec.push_back(0); //NUL terminated
+		send_buffer_pba.append_array(_dbname);
+		send_buffer_pba.push_back(0); //NUL terminated
 	}
 
 	//if (server_capabilities & CLIENT_PLUGIN_AUTH)
 	//string<NUL> authentication plugin name
-	PackedByteArray auth_plugin_name = kAuthTypeNames[(size_t)AUTH_TYPE_MYSQL_NATIVE].to_ascii_buffer();
-	send_buffer_vec.append_array(auth_plugin_name);
-	send_buffer_vec.push_back(0); //NUL terminated
+	PackedByteArray auth_plugin_name_pba = kAuthTypeNames[(size_t)AUTH_TYPE_MYSQL_NATIVE].to_ascii_buffer();
+	send_buffer_pba.append_array(auth_plugin_name_pba);
+	send_buffer_pba.push_back(0); //NUL terminated
 
 	// Implementing CLIENT_SEND_CONNECT_ATTRS will just add more data, I don't think it is needed for game dev use
 	// if (server_capabilities & CLIENT_SEND_CONNECT_ATTRS)
@@ -271,66 +267,66 @@ ErrorCode MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_typ
 	//string<lenenc> key
 	//string<lenenc> value
 
-	m_add_packet_header(send_buffer_vec, ++seq_num);
-	_stream->put_data(send_buffer_vec);
+	m_add_packet_header(send_buffer_pba, ++seq_num);
+	_stream->put_data(send_buffer_pba);
 
-	srvr_response = m_recv_data(_server_timout_msec);
+	srvr_response_pba = m_recv_data(_server_timout_msec);
 	size_t itr = 4;
 
-	if (srvr_response.size() > 0) {
+	if (srvr_response_pba.size() > 0) {
 		//4th byte is seq should be 2
-		seq_num = srvr_response[3];
+		seq_num = srvr_response_pba[3];
 		//5th byte is status
-		uint8_t status = srvr_response[itr];
+		uint8_t status = srvr_response_pba[itr];
 		if (status == 0x00) {
 			_authenticated = true;
 			return ErrorCode::OK;
 		} else if (status == 0xFE) {
-			user_auth_type = m_get_server_auth_type(m_find_vbytes_str_at(srvr_response, itr));
+			user_auth_type = m_get_server_auth_type(m_find_vbytes_str_at(srvr_response_pba, itr));
 		} else if (status == 0xFF) {
-			m_handle_server_error(srvr_response, itr);
+			m_handle_server_error(srvr_response_pba, itr);
 			_authenticated = false;
 			return ErrorCode::ERR_AUTH_FAILED;
 		} else {
 			ERR_FAIL_V_EDMSG(ErrorCode::ERR_UNKNOWN,
-				"Unhandled response code:" + String::num_uint64(srvr_response[itr], 16, true));
+				"Unhandled response code:" + String::num_uint64(srvr_response_pba[itr], 16, true));
 		}
 	}
 
 	if (user_auth_type == AUTH_TYPE_ED25519 && _client_auth_type == AUTH_TYPE_ED25519) {
 		// print_line(("using AUTH_TYPE_ED25519"));
 		// srvr_auth_msg.assign(srvr_response.begin() + itr + 1, srvr_response.end());
-		srvr_auth_msg.append_array(srvr_response.slice(itr + 1));
-		auth_response = get_client_ed25519_signature(_password_hashed, srvr_auth_msg);
-		send_buffer_vec = auth_response;
+		srvr_auth_msg_pba.append_array(srvr_response_pba.slice(itr + 1));
+		auth_response_pba = get_client_ed25519_signature(_password_hashed, srvr_auth_msg_pba);
+		send_buffer_pba = auth_response_pba;
 	} else {
 		return ErrorCode::ERR_AUTH_PROTOCOL_MISMATCH;
 	}
 
-	m_add_packet_header(send_buffer_vec, ++seq_num);
+	m_add_packet_header(send_buffer_pba, ++seq_num);
 
-	Error err = _stream->put_data(send_buffer_vec);
+	Error err = _stream->put_data(send_buffer_pba);
 	if (err != Error::OK) {
 		ERR_PRINT("Failed to put data!");
-		return ErrorCode::ERR_SEND_FAILED; // Or another appropriate value from your enum
+		return ErrorCode::ERR_SEND_FAILED;
 	}
 
-	srvr_response = m_recv_data(_server_timout_msec);
+	srvr_response_pba = m_recv_data(_server_timout_msec);
 
-	if (srvr_response.size() > 0) {
+	if (srvr_response_pba.size() > 0) {
 		//4th byte is seq should be 2
-		seq_num = srvr_response[3];
+		seq_num = srvr_response_pba[3];
 		//5th byte is status
 		itr = 4;
-		if (srvr_response[itr] == 0x00) {
+		if (srvr_response_pba[itr] == 0x00) {
 			_authenticated = true;
-		} else if (srvr_response[itr] == 0xFF) {
-			m_handle_server_error(srvr_response, itr);
+		} else if (srvr_response_pba[itr] == 0xFF) {
+			m_handle_server_error(srvr_response_pba, itr);
 			_authenticated = false;
 			return ErrorCode::ERR_AUTH_FAILED;
 		} else {
 			ERR_FAIL_V_MSG(ErrorCode::ERR_UNKNOWN,
-					"Unhandled response code:" + String::num_uint64(srvr_response[itr], 16, true));
+					"Unhandled response code:" + String::num_uint64(srvr_response_pba[itr], 16, true));
 		}
 	}
 
@@ -995,8 +991,6 @@ Variant MariaDBConnector::query(String sql_stmt) {
 	// String dict_string = Variant(col_data).stringify();
 	// print_line("Dictionary: " + dict_string);
 
-	const uint64_t timeout_usec = 1'000'000; // 1 second max wait per packet part
-	const uint64_t retry_interval_usec = 10'000; // 10 ms between checks
 	Array arr;
 
 	//process values
