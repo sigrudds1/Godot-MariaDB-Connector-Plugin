@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <class name="Argon2Hasher" inherits="RefCounted" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
 		A lightweight wrapper for the PHC Winner Argon2 hashing algorithm.
@@ -19,7 +19,6 @@
 				The salt length is defined by the current internal configuration.
 			</description>
 		</method>
-
 		<method name="hash_password_with_salt">
 			<return type="String" />
 			<param index="0" name="password" type="String" />
@@ -29,18 +28,6 @@
 				Returns the resulting hash encoded as base64.
 			</description>
 		</method>
-
-		<method name="verify_password_with_salt">
-			<return type="bool" />
-			<param index="0" name="password" type="String" />
-			<param index="1" name="base64_salt" type="String" />
-			<param index="2" name="base64_hash" type="String" />
-			<description>
-				Verifies a password against a previously stored base64-encoded salt and hash.
-				Returns true if the password is valid; false otherwise.
-			</description>
-		</method>
-
 		<method name="set_memory_cost">
 			<return type="void" />
 			<param index="0" name="memory_kib" type="int" />
@@ -49,16 +36,6 @@
 				Higher memory cost improves resistance against GPU-based attacks.
 			</description>
 		</method>
-
-		<method name="set_time_cost">
-			<return type="void" />
-			<param index="0" name="iterations" type="int" />
-			<description>
-				Sets the number of iterations (time cost) for the Argon2 algorithm.
-				Higher values increase the computational time required to compute a hash.
-			</description>
-		</method>
-
 		<method name="set_parallelism">
 			<return type="void" />
 			<param index="0" name="threads" type="int" />
@@ -67,13 +44,30 @@
 				Can improve performance on multi-core systems.
 			</description>
 		</method>
-
 		<method name="set_salt_length">
 			<return type="void" />
 			<param index="0" name="bytes" type="int" />
 			<description>
 				Sets the number of random bytes used when generating a salt.
 				The resulting salt will be base64-encoded for storage.
+			</description>
+		</method>
+		<method name="set_time_cost">
+			<return type="void" />
+			<param index="0" name="iterations" type="int" />
+			<description>
+				Sets the number of iterations (time cost) for the Argon2 algorithm.
+				Higher values increase the computational time required to compute a hash.
+			</description>
+		</method>
+		<method name="verify_password_with_salt">
+			<return type="bool" />
+			<param index="0" name="password" type="String" />
+			<param index="1" name="base64_salt" type="String" />
+			<param index="2" name="base64_hash" type="String" />
+			<description>
+				Verifies a password against a previously stored base64-encoded salt and hash.
+				Returns true if the password is valid; false otherwise.
 			</description>
 		</method>
 	</methods>

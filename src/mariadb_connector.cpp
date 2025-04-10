@@ -88,7 +88,7 @@ void MariaDBConnector::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_dbl_to_string", "is_to_str"), &MariaDBConnector::set_dbl_to_string);
 	ClassDB::bind_method(D_METHOD("set_db_name", "db_name"), &MariaDBConnector::set_db_name);
 	ClassDB::bind_method(D_METHOD("set_ip_type", "type"), &MariaDBConnector::set_ip_type);
-	ClassDB::bind_method(D_METHOD("set_server_timout", "msec"), &MariaDBConnector::set_server_timeout, DEFVAL(1000));
+	ClassDB::bind_method(D_METHOD("set_server_timeout", "msec"), &MariaDBConnector::set_server_timeout, DEFVAL(1000));
 
 	BIND_ENUM_CONSTANT(IP_TYPE_IPV4);
 	BIND_ENUM_CONSTANT(IP_TYPE_IPV6);
