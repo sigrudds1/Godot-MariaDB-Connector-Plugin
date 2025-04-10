@@ -88,6 +88,7 @@ void MariaDBConnector::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_dbl_to_string", "is_to_str"), &MariaDBConnector::set_dbl_to_string);
 	ClassDB::bind_method(D_METHOD("set_db_name", "db_name"), &MariaDBConnector::set_db_name);
 	ClassDB::bind_method(D_METHOD("set_ip_type", "type"), &MariaDBConnector::set_ip_type);
+	ClassDB::bind_method(D_METHOD("set_server_timout", "msec"), &MariaDBConnector::set_server_timeout, DEFVAL(1000));
 
 	BIND_ENUM_CONSTANT(IP_TYPE_IPV4);
 	BIND_ENUM_CONSTANT(IP_TYPE_IPV6);
@@ -136,13 +137,13 @@ uint32_t MariaDBConnector::m_chk_rcv_bfr(
 		PackedByteArray &p_bfr,
 		int &p_bfr_size,
 		const size_t p_cur_pos,
-		const size_t p_need) {
-	if (p_bfr_size - p_cur_pos < p_need)
+		const size_t p_bytes_needed) {
+	if (p_bfr_size - p_cur_pos < p_bytes_needed)
 		p_bfr.append_array(m_recv_data(1000));
 		// m_append_thread_data(p_bfr);
 
 	p_bfr_size = p_bfr.size();
-	if (p_bfr_size - p_cur_pos < p_need) {
+	if (p_bfr_size - p_cur_pos < p_bytes_needed) {
 		return (uint32_t)ERR_PACKET_LENGTH_MISMATCH;
 	} else {
 		return (uint32_t)OK;
@@ -273,7 +274,7 @@ ErrorCode MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_typ
 	m_add_packet_header(send_buffer_vec, ++seq_num);
 	_stream->put_data(send_buffer_vec);
 
-	srvr_response = m_recv_data(1000);
+	srvr_response = m_recv_data(_server_timout_msec);
 	size_t itr = 4;
 
 	if (srvr_response.size() > 0) {
@@ -314,7 +315,7 @@ ErrorCode MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_typ
 		return ErrorCode::ERR_SEND_FAILED; // Or another appropriate value from your enum
 	}
 
-	srvr_response = m_recv_data(1000);
+	srvr_response = m_recv_data(_server_timout_msec);
 
 	if (srvr_response.size() > 0) {
 		//4th byte is seq should be 2
@@ -381,7 +382,7 @@ ErrorCode MariaDBConnector::m_connect() {
 		return ErrorCode::ERR_CONNECTION_ERROR;
 	}
 
-	PackedByteArray recv_buffer = m_recv_data(250);
+	PackedByteArray recv_buffer = m_recv_data(_server_timout_msec);
 	if (recv_buffer.size() <= 4) {
 		ERR_PRINT("connect: Receive buffer empty!");
 		return ErrorCode::ERR_UNAVAILABLE;
@@ -473,7 +474,7 @@ MariaDBConnector::AuthType MariaDBConnector::m_get_server_auth_type(String p_srv
 	return server_auth_type;
 }
 
-PackedByteArray MariaDBConnector::m_recv_data(uint32_t p_timeout) {
+PackedByteArray MariaDBConnector::m_recv_data(uint32_t p_timeout, uint32_t p_expected_bytes) {
 	int32_t byte_cnt = 0;
 	PackedByteArray out_buffer;
 	uint64_t start_msec = Time::get_singleton()->get_ticks_msec();
@@ -484,10 +485,8 @@ PackedByteArray MariaDBConnector::m_recv_data(uint32_t p_timeout) {
 		_stream->poll();
 		byte_cnt = _stream->get_available_bytes();
 		if (byte_cnt > 0) {
-			// Array recv_buffer = _stream.get_data(byte_cnt);
-			data_rcvd = true;
 			out_buffer.append_array(_stream->get_data(byte_cnt)[1]);
-			start_msec = Time::get_singleton()->get_ticks_msec();
+			data_rcvd = (p_expected_bytes == 0 || out_buffer.size() >= p_expected_bytes);
 		} else if (data_rcvd) {
 			break;
 		}
@@ -845,7 +844,7 @@ Variant MariaDBConnector::query(String sql_stmt) {
 	_stream->put_data(send_buffer_vec);
 	// _tcp_mutex.unlock();
 
-	PackedByteArray srvr_response = m_recv_data(1000);
+	PackedByteArray srvr_response = m_recv_data(_server_timout_msec);
 	// m_append_thread_data(srvr_response);
 
 	if (srvr_response.size() == 0) {
@@ -894,10 +893,16 @@ Variant MariaDBConnector::query(String sql_stmt) {
 	Array col_data;
 	//	for each column (i.e column_count times)
 	for (size_t itr = 0; itr < col_cnt; ++itr) {
+		if (m_chk_rcv_bfr(srvr_response, bfr_size, pkt_itr, 24) != OK ){
+			srvr_response.append_array(m_recv_data(_server_timout_msec, 24));
+		}
 		ERR_FAIL_COND_V_EDMSG(m_chk_rcv_bfr(srvr_response, bfr_size, pkt_itr, 24) != OK, ERR_PACKET_LENGTH_MISMATCH,
 				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_itr + 24));
 
 		pkt_len = m_get_pkt_len_at(srvr_response, ++pkt_itr);
+		if (m_chk_rcv_bfr(srvr_response, bfr_size, pkt_itr, pkt_len) != OK ){
+			srvr_response.append_array(m_recv_data(_server_timout_msec, pkt_len));
+		}
 
 		// seq_num = srvr_response[++pkt_itr];
 		++pkt_itr;
@@ -948,6 +953,9 @@ Variant MariaDBConnector::query(String sql_stmt) {
 
 		//	int<lenenc> length of fixed fields (=0xC)
 		uint8_t remaining = srvr_response[++pkt_itr];
+		if (m_chk_rcv_bfr(srvr_response, bfr_size, pkt_itr, remaining) != OK ){
+			srvr_response.append_array(m_recv_data(_server_timout_msec, remaining));
+		}
 		ERR_FAIL_COND_V_EDMSG(m_chk_rcv_bfr(srvr_response, bfr_size, pkt_itr, remaining) != OK, ERR_PACKET_LENGTH_MISMATCH,
 				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_itr + remaining));
 		// ++pkt_itr; //remaining bytes in packet section
@@ -987,15 +995,24 @@ Variant MariaDBConnector::query(String sql_stmt) {
 	// String dict_string = Variant(col_data).stringify();
 	// print_line("Dictionary: " + dict_string);
 
+	const uint64_t timeout_usec = 1'000'000; // 1 second max wait per packet part
+	const uint64_t retry_interval_usec = 10'000; // 10 ms between checks
 	Array arr;
 
 	//process values
 	while (!done && pkt_itr < (size_t)srvr_response.size()) {
 		// Last packet is always 11 bytes, pkt len code = 3 bytes, seq = 1 byte, pkt data = 7 bytes
+		if (m_chk_rcv_bfr(srvr_response, bfr_size, pkt_itr, 11) != OK ){
+			srvr_response.append_array(m_recv_data(_server_timout_msec, 11));
+		}
 		ERR_FAIL_COND_V_EDMSG(m_chk_rcv_bfr(srvr_response, bfr_size, pkt_itr, 11) != OK, ERR_PACKET_LENGTH_MISMATCH,
 				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_itr + 11));
 
 		pkt_len = m_get_pkt_len_at(srvr_response, ++pkt_itr);
+		if (m_chk_rcv_bfr(srvr_response, bfr_size, pkt_itr, pkt_len) != OK ){
+			srvr_response.append_array(m_recv_data(_server_timout_msec, pkt_len));
+		}
+
 		ERR_FAIL_COND_V_EDMSG(m_chk_rcv_bfr(srvr_response, bfr_size, pkt_itr, pkt_len) != OK, ERR_PACKET_LENGTH_MISMATCH,
 				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_itr + pkt_len));
 
@@ -1010,7 +1027,11 @@ Variant MariaDBConnector::query(String sql_stmt) {
 		Dictionary dict;
 		//https://mariadb.com/kb/en/protocol-data-types/#length-encoded-strings
 		for (size_t itr = 0; itr < col_cnt; ++itr) {
+			if (m_chk_rcv_bfr(srvr_response, bfr_size, pkt_itr, 2) != OK ){
+				srvr_response.append_array(m_recv_data(_server_timout_msec, 2));
+			}
 			ERR_FAIL_COND_V_EDMSG(m_chk_rcv_bfr(srvr_response, bfr_size, pkt_itr, 2) != OK, ERR_PACKET_LENGTH_MISMATCH, vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_itr + 2));
+
 			test = srvr_response[++pkt_itr];
 			if (test == 0xFF) {
 				//ERR_Packet
@@ -1040,6 +1061,10 @@ Variant MariaDBConnector::query(String sql_stmt) {
 					len_encode = 0;
 				} else {
 					len_encode = srvr_response[pkt_itr];
+				}
+
+				if (m_chk_rcv_bfr(srvr_response, bfr_size, pkt_itr, len_encode) != OK ){
+					srvr_response.append_array(m_recv_data(_server_timout_msec, len_encode));
 				}
 
 				ERR_FAIL_COND_V_EDMSG(m_chk_rcv_bfr(srvr_response, bfr_size, pkt_itr, len_encode) != OK, ERR_PACKET_LENGTH_MISMATCH,

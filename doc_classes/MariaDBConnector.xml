@@ -63,6 +63,11 @@
 			<param index="0" name="type" type="int" enum="MariaDBConnector.IpType" />
 			<description>Change the IpType for DNS and connections, some networks may require IPV4 or IPV6 specifically.</description>
 		</method>
+		<method name="set_server_timeout">
+			<return type="void" />
+			<param index="0" name="type" type="int" default="1000" />
+			<description>Change the error delay to receive data from the MariaDB server. There are several checks to ensure the buffer size matches packet length codes, this delay can be cumulative for each pacekt length code sent from the MariaDB server, use with caution.</description>
+		</method>
 	</methods>
 	<constants>
 		<constant name="IP_TYPE_IPV4" value="1" enum="IpType">

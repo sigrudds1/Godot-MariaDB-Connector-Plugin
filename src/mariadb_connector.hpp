@@ -154,6 +154,7 @@ private:
 	Ref<StreamPeerTCP> _stream;
 	String _ip;
 	int _port = 0;
+	uint32_t _server_timout_msec = 1000;
 
 	// bool _running = true;
 	// bool _tcp_polling;
@@ -182,7 +183,7 @@ private:
 	// void m_append_thread_data(PackedByteArray &p_data, const uint64_t p_timeout = 1000);
 	// void m_tcp_thread_func();
 
-	uint32_t m_chk_rcv_bfr(PackedByteArray &bfr, int &bfr_size, const size_t cur_pos, const size_t need);
+	uint32_t m_chk_rcv_bfr(PackedByteArray &bfr, int &bfr_size, const size_t cur_pos, const size_t bvytes_needed);
 
 	ErrorCode m_client_protocol_v41(const AuthType p_srvr_auth_type, const PackedByteArray p_srvr_salt);
 	ErrorCode m_connect();
@@ -195,7 +196,7 @@ private:
 	AuthType m_get_server_auth_type(String p_srvr_auth_name);
 	Variant m_get_type_data(const int p_db_field_type, const PackedByteArray p_data);
 
-	PackedByteArray m_recv_data(uint32_t p_timeout);
+	PackedByteArray m_recv_data(uint32_t timeout, uint32_t expected_bytes = 0);
 	//TODO(sigrudds1) Add error log file using the username in the filename
 	void m_handle_server_error(const PackedByteArray p_src_buffer, size_t &p_last_pos);
 	ErrorCode m_server_init_handshake_v10(const PackedByteArray &p_src_buffer);
@@ -259,9 +260,12 @@ public:
 	void set_dbl_to_string(bool is_to_str);
 	void set_db_name(String p_db_name);
 	void set_ip_type(IpType p_type);
-	//TODO(sigrudds1) Async Callbacks signals
+	void set_server_timeout(uint32_t msec = 1000){
+		_server_timout_msec = msec;
+	}
+		// TODO(sigrudds1) Async Callbacks signals
 
-	MariaDBConnector();
+		MariaDBConnector();
 	~MariaDBConnector();
 };
 
