@@ -54,6 +54,7 @@ You can find the build instructions at [Godot Docs](https://docs.godotengine.org
 
 ## Support
 Join my [Discord Server](https://discord.gg/jJe2eFfjGd) for help and feedback.
+
 For issues, open a ticket on [GitHub Issues](https://github.com/sigrudds1/Godot-MariaDB-Connector-Plugin/issues).
 
 ## Donations
