@@ -1,0 +1,118 @@
+sudo apt update && sudo apt upgrade -y
+
+sudo apt install mariadb-server # Latest package versions: Ubuntu 22 is 10.6, Ubuntu 24 is 10.11
+# MariaDB Connector does not support major version 11.x.x
+
+# Otherwise to inatall a version not available in packages
+sudo apt purge mariadb-server
+sudo apt install software-properties-common -y
+sudo apt install curl
+#MariaDB has a nice setup script
+curl -LsS -O https://downloads.mariadb.com/MariaDB/mariadb_repo_setup
+sudo bash mariadb_repo_setup --mariadb-server-version=10.11 
+sudo apt update
+sudo apt install mariadb-server
+
+# Continue after MariaDB install 
+sudo mariadb-secure-installation
+
+# Fix bind address for localhost IPv4 and IPv6, not to be ran in this script
+sudo nano /etc/mysql/mariadb.conf.d/50-server.cnf 
+# comment out bind-address <ctrl>w bind-address<enter>
+# As of 10.11, you can specify more than one bind address, comma-separated, for simplicity I am going to comment it out,
+# but for a secure setup you will want to add, localhost in ipv4(127.0.0.1) and ipv6(::1) notation
+
+sudo systemctl status mariadb
+# Check the status to see if it it running
+
+sudo systemctl enable mariadb
+# If not running
+# ~or~
+sudo systemctl restart mariadb
+# If so, you can probalby just run this even when not running
+
+sudo systemctl status mariadb
+
+sudo mariadb -p
+# Add ed25519 From MariaDB 10.4.0:
+INSTALL PLUGIN IF NOT EXISTS ed25519 SONAME 'auth_ed25519';
+
+# Fix root password, if you want it separate from root user of the system
+ALTER USER root@localhost IDENTIFIED VIA mysql_native_password USING PASSWORD("supersecret");
+
+# Note the DB name and passwords are what are used in the demo project,
+# the password hashes, in the demo project are also from the secret password
+CREATE DATABASE IF NOT EXISTS Godot_Test;
+
+# Addin user for ed25519 authentication
+# You have specify each IP or subnet, for the same user, I add both IPv4 and IPV6 for compatibility.
+CREATE USER `ed_user`@'localhost' IDENTIFIED VIA ed25519 USING PASSWORD('secret');
+CREATE USER `ed_user`@'::1' IDENTIFIED VIA ed25519 USING PASSWORD('secret');
+
+# I am adding users for my entire test subnet, so I can access this from any of my VM Guests or Machines
+# Use your subnet, typically 192.168.1.%
+CREATE USER `ed_user`@'192.168.2.%' IDENTIFIED VIA ed25519 USING PASSWORD('secret'); 
+
+# Verify user got added
+SELECT user, host FROM mysql.user WHERE user='ed_user';
+
+# Add privledges for ed_user on Godot_Test DB, note backticks on dbname"
+GRANT ALL PRIVILEGES ON `Godot_Test`.* TO 'ed_user'@'localhost';
+GRANT ALL PRIVILEGES ON `Godot_Test`.* TO 'ed_user'@'::1'; 
+GRANT ALL PRIVILEGES ON `Godot_Test`.* TO 'ed_user'@'192.168.2.%';
+
+# Show the grants for the user, best practice to always verify
+SHOW GRANTS FOR 'ed_user'@'localhost'; 
+SHOW GRANTS FOR 'ed_user'@'::1'; 
+SHOW GRANTS FOR 'ed_user'@'192.168.2.%';
+
+# Another user for MySQL Native Password Authentication" 
+CREATE USER `native_user`@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD('secret');
+CREATE USER `native_user`@'::1' IDENTIFIED VIA mysql_native_password USING PASSWORD('secret');
+CREATE USER `native_user`@'192.168.2.%' IDENTIFIED VIA mysql_native_password USING PASSWORD('secret');
+
+SELECT user, host FROM mysql.user WHERE user='native_user';
+
+GRANT ALL PRIVILEGES ON `Godot_Test`.* TO 'native_user'@'localhost';
+GRANT ALL PRIVILEGES ON `Godot_Test`.* TO 'native_user'@'::1'; 
+GRANT ALL PRIVILEGES ON `Godot_Test`.* TO 'native_user'@'192.168.2.%';
+
+SHOW GRANTS FOR 'native_user'@'localhost'; 
+SHOW GRANTS FOR 'native_user'@'::1'; 
+SHOW GRANTS FOR 'native_user'@'192.168.2.%'; 
+
+quit;
+
+# To import the database use
+mariadb -u root -p Godot_Test < dump_Godot_Test_full.sql
+
+
+# There are a couple ways to try this out
+# 1 a) Create a new project or use an existing one
+# 	b) Install the addon, see below
+# 	c) Create a new scene and attach a script or use an dexisting one.
+# 	d) Copy the main.gd text, from the repo(View Fiile in the addon description) to your project.
+# 2 a) Download the demo.zip from the latest release
+#	b) Install the addon, see below.
+# 	c) Reload the project
+
+
+# Installing the addon
+#  In the AssetLib tab, find MariaDB Connector (SQL, DB)
+#  Download and install the addon
+ 
+
+# Updating the addon
+# If the project is open, the addon files will not be overwritten.
+# 1) In the FileSystem portion of the editor, right-click the addon folder and select Open in the File Manager.
+# 2) Close or select Project>Quit to Project List.
+# 3) In the File Manager, delete the godot-mariadb-connector folder.
+# 2) Reopen the project.
+# 3) Install the addon like before.
+
+  
+# When connecting to a Linux VM from Windows sometimes you will get a failed connnection, it most likey is an ARP table issue
+# On the Windows Host run in PowerShell
+Test-NetConnection -ComputerName "the VM's IP" -Port 3306
+# If it takes a second to complete but it successful, ARP table was probably the issue, it should connect now.
+
