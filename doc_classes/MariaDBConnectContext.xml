@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="MariaDBConnectContext" inherits="RefCounted" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Contains all parameters required to connect to a MariaDB database.
+	</brief_description>
+	<description>
+		MariaDBConnectContext serves as a container for all settings needed to establish a MariaDB connection for the connectr_db_context method in the MariaDBConnector class.
+	This includes the hostname, port, database name, user credentials, authentication type, encoding method for the password, and whether the password is already hashed. This class simplifies passing connection data between systems or loading from config files.
+	The default setting are listed below, if you configure the server to the defaults then you only have to assign username, password as base64 with sha512 ecryption, and the db_name.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="auth_type" type="int" setter="set_auth_type" getter="get_auth_type" enum="MariaDBConnectContext.AuthType" default="0">
+			Authentication plugin to use when connecting to the server, default is AUTH_TYPE_ED25519.
+		</member>
+		<member name="db_name" type="String" setter="set_db_name" getter="get_db_name" default="&quot;&quot;">
+			Name of the database to connect to.
+		</member>
+		<member name="encoding" type="int" setter="set_encoding" getter="get_encoding" enum="MariaDBConnectContext.Encoding" default="0">
+			Encoding type of the password string (plain text, hex, or base64), default is base64.
+		</member>
+		<member name="hostname" type="String" setter="set_hostname" getter="get_hostname" default="&quot;&quot;">
+			Hostname or IP address of the MariaDB server.
+		</member>
+		<member name="is_prehashed" type="bool" setter="set_is_prehashed" getter="get_is_prehashed" default="true">
+			Indicates if the password is already hashed before being sent.
+		</member>
+		<member name="password" type="String" setter="set_password" getter="get_password" default="&quot;&quot;">
+			Password or pre-hashed password string.
+		</member>
+		<member name="port" type="int" setter="set_port" getter="get_port" default="3306">
+			Port used to connect to the MariaDB server.
+		</member>
+		<member name="username" type="String" setter="set_username" getter="get_username" default="&quot;&quot;">
+			Username used for authentication.
+		</member>
+	</members>
+	<constants>
+		<constant name="ENCODE_BASE64" value="0" enum="Encoding">
+			Password is base64-encoded binary data.
+		</constant>
+		<constant name="ENCODE_HEX" value="1" enum="Encoding">
+			Password is hex-encoded binary data.
+		</constant>
+		<constant name="ENCODE_PLAIN" value="2" enum="Encoding">
+			Password is a plain text UTF-8 string.
+		</constant>
+		<constant name="AUTH_TYPE_ED25519" value="0" enum="AuthType">
+			Use the client_ed25519 authentication plugin.
+		</constant>
+		<constant name="AUTH_TYPE_MYSQL_NATIVE" value="1" enum="AuthType">
+			Use the mysql_native_password authentication plugin.
+		</constant>
+	</constants>
+</class>

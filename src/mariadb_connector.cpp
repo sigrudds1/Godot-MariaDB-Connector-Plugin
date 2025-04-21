@@ -39,10 +39,10 @@
 #include <godot_cpp/classes/time.hpp>
 #include <godot_cpp/classes/os.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
+#include <godot_cpp/classes/marshalls.hpp>
 
 
 using namespace godot;
-using ErrorCode = MariaDBConnector::ErrorCode;
 
 static inline PackedByteArray _sha1(const PackedByteArray &p_data) {
 	PackedByteArray output;
@@ -75,6 +75,7 @@ MariaDBConnector::~MariaDBConnector() {
 void MariaDBConnector::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("connect_db", "hostname", "port", "database", "username", "password", "authtype",
 			"is_prehashed"), &MariaDBConnector::connect_db, DEFVAL(AUTH_TYPE_ED25519), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("connect_db_context", "context"), &MariaDBConnector::connect_db_context);
 	ClassDB::bind_method(D_METHOD("disconnect_db"), &MariaDBConnector::disconnect_db);
 	ClassDB::bind_method(D_METHOD("get_last_query"), &MariaDBConnector::get_last_query);
 	ClassDB::bind_method(D_METHOD("get_last_query_converted"), &MariaDBConnector::get_last_query_converted);
@@ -148,7 +149,7 @@ uint32_t MariaDBConnector::m_chk_rcv_bfr(
 }
 
 //client protocol 4.1
-ErrorCode MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_type, const PackedByteArray p_srvr_salt) {
+MariaDBConnector::ErrorCode MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_type, const PackedByteArray p_srvr_salt) {
 
 	PackedByteArray srvr_response_pba;
 	PackedByteArray srvr_auth_msg_pba;
@@ -333,7 +334,7 @@ ErrorCode MariaDBConnector::m_client_protocol_v41(const AuthType p_srvr_auth_typ
 	return ErrorCode::OK;
 }
 
-ErrorCode MariaDBConnector::m_connect() {
+MariaDBConnector::ErrorCode MariaDBConnector::m_connect() {
 
 
 	disconnect_db();
@@ -553,7 +554,7 @@ size_t MariaDBConnector::m_get_pkt_len_at(const PackedByteArray p_src_buf, size_
 	return len;
 }
 
-ErrorCode MariaDBConnector::m_server_init_handshake_v10(const PackedByteArray &p_src_buffer) {
+MariaDBConnector::ErrorCode MariaDBConnector::m_server_init_handshake_v10(const PackedByteArray &p_src_buffer) {
 
 	//nul string - read the 5th byte until the first nul(00), this is server version string, it is nul terminated
 	size_t pkt_itr = 3;
@@ -664,7 +665,7 @@ void MariaDBConnector::m_update_username(String p_username) {
 }
 
 //public
-ErrorCode MariaDBConnector::connect_db(
+MariaDBConnector:: ErrorCode MariaDBConnector::connect_db(
 		String p_host,
 		int p_port,
 		String p_dbname,
@@ -731,6 +732,41 @@ ErrorCode MariaDBConnector::connect_db(
 	_client_auth_type = p_authtype;
 	return m_connect();
 }
+
+MariaDBConnector::ErrorCode MariaDBConnector::connect_db_context(Ref<MariaDBConnectContext> p_context) {
+	if (p_context.is_null()) {
+		ERR_PRINT("ConnectionContext is null.");
+		return ErrorCode::ERR_INIT_ERROR;
+	}
+
+	const int encoding = p_context->get_encoding();
+	String password = p_context->get_password();
+	const bool is_prehashed = p_context->get_is_prehashed();
+
+	if (encoding == MariaDBConnectContext::ENCODE_BASE64){
+		// BASE64 should always be treated as binary -> hex
+		password = Marshalls::get_singleton()->base64_to_raw(password).hex_encode();
+	} else if (is_prehashed){
+		if (encoding == MariaDBConnectContext::ENCODE_PLAIN){
+			// convert plain to hex
+			password = password.to_utf8_buffer().hex_encode();
+		}
+		// Just pass hex
+	}
+	// hex decode is dangerous, just pass the unmodified string if hex or plain
+
+
+	return connect_db(
+		p_context->get_hostname(),
+		p_context->get_port(),
+		p_context->get_db_name(),
+		p_context->get_username(),
+		password,
+		static_cast<MariaDBConnector::AuthType>(p_context->get_auth_type()),
+		is_prehashed
+	);
+}
+
 
 void MariaDBConnector::disconnect_db() {
 	// _tcp_polling = false;

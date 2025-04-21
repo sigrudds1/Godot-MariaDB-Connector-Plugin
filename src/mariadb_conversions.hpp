@@ -33,8 +33,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 
-#ifndef MARIADB_CONVERSIONS_HPP
-#define MARIADB_CONVERSIONS_HPP
+#pragma once
 
 #include <godot_cpp/core/class_db.hpp>
 
@@ -125,4 +124,3 @@ String vbytes_to_utf8_itr_at(const PackedByteArray &p_src_buf, size_t &p_last_po
 	return rtn_val;
 }
 
-#endif // !MARIADB_CONVERSIONS_H

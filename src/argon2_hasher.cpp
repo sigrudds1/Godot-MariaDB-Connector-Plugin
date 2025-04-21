@@ -26,11 +26,8 @@ void Argon2Hasher::_bind_methods()
 	ClassDB::bind_method(D_METHOD("verify_password_with_salt", "password", "base64_salt", "base64_hash"), &Argon2Hasher::verify_password_with_salt);
 }
 
-Argon2Hasher::Argon2Hasher(){
-
-}Argon2Hasher::~Argon2Hasher(){
-
-}
+Argon2Hasher::Argon2Hasher(){}
+Argon2Hasher::~Argon2Hasher(){}
 
 void Argon2Hasher::set_time_cost(uint32_t cost) { _time_cost = cost; }
 void Argon2Hasher::set_memory_cost(uint32_t mem) { _memory_cost = mem; }

@@ -1,6 +1,5 @@
 // argon2_hasher.hpp
-#ifndef ARGON2_HASHER_H
-#define ARGON2_HASHER_H
+#pragma once
 
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/core/class_db.hpp>
@@ -35,5 +34,3 @@ private:
 	PackedByteArray _secure_random_bytes(int size);
 
 };
-
-#endif // ARGON2_HASHER_H

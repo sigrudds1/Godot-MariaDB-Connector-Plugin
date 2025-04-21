@@ -20,9 +20,16 @@
 			<param index="6" name="is_prehashed" type="bool" default="true" />
 			<description>
 				Establishes a connection to the MariaDB server using the provided host, port, database name, username, and password.
-			If is_prehashed = true then
-			   If authtype = AUTH_TYPE_MYSQL_NATIVE, the password string must be sha1 hex hash of the plain password.
-			   If authtype = AUTH_TYPE_ED25519, the password string must be sha512 hex hash of the plain password.
+				If is_prehashed = true then
+				   If authtype = AUTH_TYPE_MYSQL_NATIVE, the password string must be sha1 hex hash of the plain password.
+				   If authtype = AUTH_TYPE_ED25519, the password string must be sha512 hex hash of the plain password.
+			</description>
+		</method>
+		<method name="connect_db_context">
+			<return type="int" enum="MariaDBConnector.ErrorCode" />
+			<param index="0" name="context" type="MariaDBConnectContext" />
+			<description>
+				Uses thw MariaDBConnectContext class as a parameter for connection parameters.
 			</description>
 		</method>
 		<method name="disconnect_db">

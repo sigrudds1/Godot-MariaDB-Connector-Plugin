@@ -29,8 +29,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 
-#ifndef MARIADB_CONNECTOR_HPP
-#define MARIADB_CONNECTOR_HPP
+#pragma once
 
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/core/binder_common.hpp>
@@ -38,6 +37,8 @@
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/classes/ip.hpp>
 #include <godot_cpp/classes/stream_peer_tcp.hpp>
+#include "mariadb_connector_common.hpp"
+#include "mariadb_connect_context.hpp"
 
 // #include <thread>
 // #include <godot_cpp/classes/thread.hpp>
@@ -53,9 +54,9 @@ class MariaDBConnector : public RefCounted {
 
 public:
 	enum AuthType {
-		AUTH_TYPE_ED25519,
-		AUTH_TYPE_MYSQL_NATIVE,
-		AUTH_TYPE_LAST,
+		AUTH_TYPE_ED25519 = MariaDBConnectorCommon::AUTH_TYPE_ED25519,
+		AUTH_TYPE_MYSQL_NATIVE = MariaDBConnectorCommon::AUTH_TYPE_MYSQL_NATIVE,
+		AUTH_TYPE_LAST = MariaDBConnectorCommon::AUTH_TYPE_LAST
 	};
 
 	enum IpType {
@@ -236,8 +237,8 @@ public:
 	 * \return 				uint32_t 0 = no error, see error enum class ErrorCode
 	 */
 	ErrorCode connect_db(String host, int port, String dbname, String username, String password,
-			AuthType auth_type = AuthType::AUTH_TYPE_ED25519, bool is_prehashed = true);
-
+		AuthType auth_type = AuthType::AUTH_TYPE_ED25519, bool is_prehashed = true);
+	ErrorCode connect_db_context(Ref<MariaDBConnectContext> p_context);
 	void disconnect_db();
 
 	String get_last_query();
@@ -269,8 +270,8 @@ public:
 	~MariaDBConnector();
 };
 
+
 VARIANT_ENUM_CAST(MariaDBConnector::AuthType);
 VARIANT_ENUM_CAST(MariaDBConnector::IpType);
 VARIANT_ENUM_CAST(MariaDBConnector::ErrorCode);
 
-#endif

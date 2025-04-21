@@ -13,8 +13,12 @@ enum AuthType{
 var ed: Dictionary = {
 	"db_plain_text_pwd": "secret",
 	"db_sha1_hashed_pwd": "e5e9fa1ba31ecd1ae84f75caaa474f3a663f05f4",
-	"db_sha512_hashed_pwd": "bd2b1aaf7ef4f09be9f52ce2d8d599674d81aa9d6a4421696dc4d93dd0619d68" +
+	"db_sha1_hashed_pwd_b64": "5en6G6MezRroT3XKqkdPOmY/BfQ=",
+	"db_sha512_hashed_pwd": 
+		"bd2b1aaf7ef4f09be9f52ce2d8d599674d81aa9d6a4421696dc4d93dd0619d68" +
 		"2ce56b4d64a9ef097761ced99e0f67265b5f76085e5b0ee7ca4696b2ad6fe2b2",
+	"db_sha512_hashed_pwd_b64": 
+		"vSsar3708Jvp9Szi2NWZZ02Bqp1qRCFpbcTZPdBhnWgs5WtNZKnvCXdhztmeD2cmW192CF5bDufKRpayrW/isg==",
 	"db_hostname": "127.0.0.1",
 	"db_max_conns": 5,
 	"db_name": "Godot_Test",
@@ -34,6 +38,9 @@ var _auth_type: AuthType = AuthType.ED25519_HASHED
 
 
 func _ready() -> void:
+
+	
+	
 	db = MariaDBConnector.new()
 	_connect_to_db_srvr(_auth_type)
 	# Use inserts once to build data if using structure only
@@ -46,10 +53,34 @@ func _ready() -> void:
 	var salt: String = hasher.generate_b64_salt()
 	var hashed: String = hasher.hash_password_with_salt("secret", salt)
 	print("argon2 hash: %s" % hashed)
+	
+	context_connection()
 
 
 func _exit_tree() -> void:
 	db.disconnect_db()
+
+
+func context_connection() -> void:
+	var ctx := MariaDBConnectContext.new()
+	ctx.hostname = ed["db_hostname"]
+	ctx.port = ed["db_port"]
+	ctx.db_name = ed["db_name"]
+	ctx.username = ed["db_ed_user"]
+	ctx.password = ed["db_sha512_hashed_pwd_b64"] as String
+	# You can now store passwords as base64
+	ctx.encoding = MariaDBConnectContext.ENCODE_BASE64 # Default, for exmaple only
+	#ctx.password = ed["db_sha512_hashed_pwd"] as String
+	#ctx.encoding = MariaDBConnectionContext.ENCODE_HEX
+	ctx.auth_type = MariaDBConnectContext.AUTH_TYPE_ED25519 # Default, for exmaple only
+	
+	var ctx_db := MariaDBConnector.new()
+	var err: int = ctx_db.connect_db_context(ctx)
+	if err != MariaDBConnector.ErrorCode.OK:
+		push_error(err)
+		return
+	print(ctx_db.query("SELECT * FROM Godot_Test.many_records LIMIT 1;"))
+	
 
 
 func print_db_response(pba: PackedByteArray) -> void:
