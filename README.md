@@ -64,7 +64,7 @@ If you find this project useful and would like to support development, consider 
 - [Ko-fi](https://ko-fi.com/vikingtinkerer)
 
 ## Version Updates Summary
-v1.4.0 - Added new breakout methods for query and supporting last_error member variable to test for errors, context method name was changed.
+v1.4.0 - Added new breakout methods for query and supporting last_error member variable to test for errors, context method name was changed, added gdscript examples in demo.
 
 v1.3.0 - Added a connection method to faacilitate base64 encoded baswords with a supporting context class.
 
