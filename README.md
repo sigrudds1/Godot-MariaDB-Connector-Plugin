@@ -63,7 +63,11 @@ If you find this project useful and would like to support development, consider 
 - [Buy Me a Coffee](https://buymeacoffee.com/VikingTinkerer)
 - [Ko-fi](https://ko-fi.com/vikingtinkerer)
 
-## Version Updates
+## Version Updates Summary
+v1.4.0 - Added new breakout methods for query and supporting last_error member variable to test for errors, context method name was changed.
+
+v1.3.0 - Added a connection method to faacilitate base64 encoded baswords with a supporting context class.
+
 v1.2.2 - Added buffer checks and timeout property to compensate for slower MariaDB servers on Rasberry Pi SD card installed OS.
 
 v1.2.1 - Added authtype description to editor docs.
