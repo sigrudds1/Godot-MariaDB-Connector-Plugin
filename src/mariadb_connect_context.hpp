@@ -46,7 +46,7 @@ protected:
 	static void _bind_methods();
 
 private:
-	String _hostname;
+	String _hostname = "127.0.0.1";
 	int _port = 3306;
 	String _db_name;
 	String _username;

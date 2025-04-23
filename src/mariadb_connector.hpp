@@ -31,14 +31,14 @@
 
 #pragma once
 
-#include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/core/binder_common.hpp>
+#include <godot_cpp/core/class_db.hpp>
 
-#include <godot_cpp/classes/ref_counted.hpp>
-#include <godot_cpp/classes/ip.hpp>
-#include <godot_cpp/classes/stream_peer_tcp.hpp>
-#include "mariadb_connector_common.hpp"
 #include "mariadb_connect_context.hpp"
+#include "mariadb_connector_common.hpp"
+#include <godot_cpp/classes/ip.hpp>
+#include <godot_cpp/classes/ref_counted.hpp>
+#include <godot_cpp/classes/stream_peer_tcp.hpp>
 
 // #include <thread>
 // #include <godot_cpp/classes/thread.hpp>
@@ -65,7 +65,7 @@ public:
 		IP_TYPE_ANY = IP::TYPE_ANY,
 	};
 
-	enum ErrorCode : int64_t{
+	enum ErrorCode : int64_t {
 		OK = 0,
 		ERR_NO_RESPONSE,
 		ERR_NOT_CONNECTED,
@@ -88,8 +88,8 @@ public:
 		ERR_AUTH_PROTOCOL_MISMATCH,
 		ERR_SEND_FAILED,
 		ERR_INVALID_PORT,
-		ERR_UNKNOWN
-
+		ERR_UNKNOWN,
+		ERR_PACKET
 	};
 
 private:
@@ -138,7 +138,6 @@ private:
 		MARIADB_CLIENT_CACHE_METADATA = (1ULL << 36)
 	};
 
-
 	const String kAuthTypeNamesStr = "client_ed25519,mysql_native_password";
 	const PackedStringArray kAuthTypeNames = kAuthTypeNamesStr.split(",");
 	bool _dbl_to_string = false;
@@ -167,11 +166,10 @@ private:
 	String _server_ver_str;
 	uint8_t _srvr_major_ver = 0;
 	uint8_t _srvr_minor_ver = 0;
-	String _last_query;
+	ErrorCode _last_error = OK;
 	PackedByteArray _last_query_converted;
 	PackedByteArray _last_transmitted;
 	PackedByteArray _last_response;
-
 
 	/**
 	 * \brief			Adds the packet size and sequence number to the beginning of the packet,
@@ -184,7 +182,7 @@ private:
 	// void m_append_thread_data(PackedByteArray &p_data, const uint64_t p_timeout = 1000);
 	// void m_tcp_thread_func();
 
-	uint32_t m_chk_rcv_bfr(PackedByteArray &bfr, int &bfr_size, const size_t cur_pos, const size_t bytes_needed);
+	ErrorCode _rcv_bfr_chk(PackedByteArray &bfr, int &bfr_size, const size_t cur_pos, const size_t bytes_needed);
 
 	ErrorCode m_client_protocol_v41(const AuthType p_srvr_auth_type, const PackedByteArray p_srvr_salt);
 	ErrorCode m_connect();
@@ -204,21 +202,22 @@ private:
 	void m_hash_password(String p_password);
 	void m_update_username(String P_username);
 
+	Variant _query(const String &sql_stmt, const bool is_command = false);
+
 	static inline bool is_valid_hex(const String &p_string, int expected_length = 0) {
-        if (expected_length > 0 && p_string.length() != expected_length) {
-            return false;
-        }
+		if (expected_length > 0 && p_string.length() != expected_length) {
+			return false;
+		}
 
-        for (int i = 0; i < p_string.length(); i++) {
-            char32_t c = p_string.unicode_at(i);
-            if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f'))) {
-                return false;
-            }
-        }
+		for (int i = 0; i < p_string.length(); i++) {
+			char32_t c = p_string.unicode_at(i);
+			if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f'))) {
+				return false;
+			}
+		}
 
-        return true;
-    }
-
+		return true;
+	}
 
 protected:
 	static void _bind_methods();
@@ -236,42 +235,41 @@ public:
 	 * \param is_pre_hash	bool if set the password used will be hashed by the required type before used.
 	 * \return 				uint32_t 0 = no error, see error enum class ErrorCode
 	 */
-	ErrorCode connect_db(String host, int port, String dbname, String username, String password,
-		AuthType auth_type = AuthType::AUTH_TYPE_ED25519, bool is_prehashed = true);
-	ErrorCode connect_db_context(Ref<MariaDBConnectContext> p_context);
-	void disconnect_db();
+	ErrorCode connect_db(const String &host, const int port, const String &dbname, const String &username,
+			const String &password, const AuthType auth_type = AuthType::AUTH_TYPE_ED25519, bool is_prehashed = true);
 
-	String get_last_query();
+	ErrorCode connect_db_ctx(const Ref<MariaDBConnectContext> &p_context);
+	void disconnect_db();
+	Dictionary excecute_command(const String &sql_stmt);
+	ErrorCode get_last_error() const { return _last_error; }
 	PackedByteArray get_last_query_converted();
 	PackedByteArray get_last_response();
 	PackedByteArray get_last_transmitted();
 
-	// PackedByteArray get_caching_sha2_passwd_hash(PackedByteArray p_sha256_hashed_passwd, PackedByteArray p_srvr_salt);
-	PackedByteArray get_client_ed25519_signature(PackedByteArray p_sha512_hashed_passwd, PackedByteArray p_svr_msg);
-	PackedByteArray get_mysql_native_password_hash(PackedByteArray p_sha1_hashed_passwd, PackedByteArray p_srvr_salt);
+	// PackedByteArray get_caching_sha2_passwd_hash(PackedByteArray p_sha256_hashed_passwd, PackedByteArray
+	// p_srvr_salt);
+	PackedByteArray get_client_ed25519_signature(
+			const PackedByteArray &p_sha512_hashed_passwd, const PackedByteArray &p_svr_msg);
+	PackedByteArray get_mysql_native_password_hash(
+			const PackedByteArray &p_sha1_hashed_passwd, const PackedByteArray &p_srvr_salt);
 
 	bool is_connected_db();
 
-	Variant query(String sql_stmt);
-
-
+	TypedArray<Dictionary> select_query(const String &sql_stmt);
+	Variant query(const String &sql_stmt) { return _query(sql_stmt); }
 	//TODO(sigrudds1) Implement SSL/TLS
 	//void tls_enable(bool enable);
 
 	void set_dbl_to_string(bool is_to_str);
 	void set_db_name(String p_db_name);
 	void set_ip_type(IpType p_type);
-	void set_server_timeout(uint32_t msec = 1000){
-		_server_timout_msec = msec;
-	}
-		// TODO(sigrudds1) Async Callbacks signals
+	void set_server_timeout(uint32_t msec = 1000) { _server_timout_msec = msec; }
+	// TODO(sigrudds1) Async Callbacks signals
 
-		MariaDBConnector();
+	MariaDBConnector();
 	~MariaDBConnector();
 };
-
 
 VARIANT_ENUM_CAST(MariaDBConnector::AuthType);
 VARIANT_ENUM_CAST(MariaDBConnector::IpType);
 VARIANT_ENUM_CAST(MariaDBConnector::ErrorCode);
-

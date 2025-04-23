@@ -5,8 +5,8 @@
 	</brief_description>
 	<description>
 		MariaDBConnectContext serves as a container for all settings needed to establish a MariaDB connection for the connectr_db_context method in the MariaDBConnector class.
-	This includes the hostname, port, database name, user credentials, authentication type, encoding method for the password, and whether the password is already hashed. This class simplifies passing connection data between systems or loading from config files.
-	The default setting are listed below, if you configure the server to the defaults then you only have to assign username, password as base64 with sha512 ecryption, and the db_name.
+		This includes the hostname, port, database name, user credentials, authentication type, encoding method for the password, and whether the password is already hashed. This class simplifies passing connection data between systems or loading from config files.
+		The default setting are listed below, if you configure the server to the defaults then you only have to assign username, password as base64 with sha512 ecryption, and the db_name.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -20,7 +20,7 @@
 		<member name="encoding" type="int" setter="set_encoding" getter="get_encoding" enum="MariaDBConnectContext.Encoding" default="0">
 			Encoding type of the password string (plain text, hex, or base64), default is base64.
 		</member>
-		<member name="hostname" type="String" setter="set_hostname" getter="get_hostname" default="&quot;&quot;">
+		<member name="hostname" type="String" setter="set_hostname" getter="get_hostname" default="&quot;127.0.0.1&quot;">
 			Hostname or IP address of the MariaDB server.
 		</member>
 		<member name="is_prehashed" type="bool" setter="set_is_prehashed" getter="get_is_prehashed" default="true">

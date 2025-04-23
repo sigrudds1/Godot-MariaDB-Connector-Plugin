@@ -75,12 +75,35 @@ func context_connection() -> void:
 	ctx.auth_type = MariaDBConnectContext.AUTH_TYPE_ED25519 # Default, for exmaple only
 	
 	var ctx_db := MariaDBConnector.new()
-	var err: int = ctx_db.connect_db_context(ctx)
+	var err: int = ctx_db.connect_db_ctx(ctx)
 	if err != MariaDBConnector.ErrorCode.OK:
 		push_error(err)
 		return
-	print(ctx_db.query("SELECT * FROM Godot_Test.many_records LIMIT 1;"))
 	
+	var stmt: String = "INSERT INTO Godot_Test.many_records (type, zone_id, player_id, map_id, " +\
+			"text_field) VALUES " 
+	
+	var type: int = randi() % 100
+	var zone: int = randi() % 100
+	var plyr_id: int = randi() % 65536
+	var map_id: int = randi() % 24
+	var txt: String = "Some text for record player %d" % plyr_id
+	
+	stmt += "(%d, %d, %d, %d, '%s');" % [type, zone, plyr_id, map_id, txt]
+	var res: Dictionary = ctx_db.execute_command(stmt)
+	if ctx_db.last_error == MariaDBConnector.ErrorCode.OK:
+		print("rows affected:", res)
+	else:
+		printerr("Error %d on INSERT" % [ctx_db.last_error])
+	
+	stmt = "SELECT * FROM Godot_Test.many_records WHERE " + \
+		"type = %d AND zone_id = %d AND player_id = %d AND map_id = %d LIMIT 1;" % [
+		type, zone, plyr_id, map_id]
+	var rows: Array[Dictionary] = ctx_db.select_query(stmt)
+	if ctx_db.last_error == MariaDBConnector.ErrorCode.OK:
+		print("rows:", rows)
+	else:
+		printerr("Error %d on select" % [ctx_db.last_error])
 
 
 func print_db_response(pba: PackedByteArray) -> void:
@@ -166,10 +189,10 @@ func _insert_many_columns() -> void:
 
 
 func _insert_many_records() -> void:
-	var stmt: String = "INSERT INTO Godot_Test.`many_records (type, zone_id, player_id, map_id, " +\
+	var stmt: String = "INSERT INTO Godot_Test.many_records (type, zone_id, player_id, map_id, " +\
 			"text_field) VALUES " 
 	for i in 10:
-		stmt += "(%d, %d, %d, %d, %s)" % [i * 10 + 1, i * 10 + 2, i * 10 + 3, i * 10 + 4, 
+		stmt += "(%d, %d, %d, %d, '%s')" % [i * 10 + 1, i * 10 + 2, i * 10 + 3, i * 10 + 4, 
 			"Some text for record %d" % i]
 	
 	stmt += ";"

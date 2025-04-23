@@ -25,9 +25,9 @@
 				   If authtype = AUTH_TYPE_ED25519, the password string must be sha512 hex hash of the plain password.
 			</description>
 		</method>
-		<method name="connect_db_context">
+		<method name="connect_db_ctx">
 			<return type="int" enum="MariaDBConnector.ErrorCode" />
-			<param index="0" name="context" type="MariaDBConnectContext" />
+			<param index="0" name="mariadb_connect_context" type="MariaDBConnectContext" />
 			<description>
 				Uses thw MariaDBConnectContext class as a parameter for connection parameters.
 			</description>
@@ -38,10 +38,18 @@
 				Disconnects from the current database session.
 			</description>
 		</method>
-		<method name="get_last_query">
-			<return type="String" />
+		<method name="execute_command">
+			<return type="Dictionary" />
+			<param index="0" name="sql_stmt" type="String" />
 			<description>
-				Returns the raw SQL query string from the last executed query.
+				Returns a [Dictionary] with the affected_rows, last_insert_id, status_flags, warnings, and info for all 
+					none SELECT command types like INSERT, UPDATE, DELETE, BEGIN, COMMIT and ROLLBACK.
+			</description>
+		</method>
+		<method name="get_last_error" qualifiers="const">
+			<return type="int" enum="MariaDBConnector.ErrorCode" />
+			<description>
+				Getter for last_error, use to check for OK or ErrorCode on last funtion.
 			</description>
 		</method>
 		<method name="get_last_query_converted">
@@ -62,17 +70,18 @@
 				Returns the last transmitted packet buffer sent to the server.
 			</description>
 		</method>
-		<method name="is_connected_db">
-			<return type="bool" />
-			<description>
-				Checks if the client is currently connected to a MariaDB server.
-			</description>
-		</method>
 		<method name="query">
 			<return type="Variant" />
 			<param index="0" name="sql_stmt" type="String" />
 			<description>
 				Executes the given SQL statement against the connected database. The result of the query could be ErrorCode or [Array][[Dictionary]], for SELECT only, depending on the statement.
+			</description>
+		</method>
+		<method name="select_query">
+			<return type="Dictionary[]" />
+			<param index="0" name="sql_stmt" type="String" />
+			<description>
+				Works thw same as query except returns a strict type [Array][[Dictionary]] instead of Variant, use last_error to check for error.
 			</description>
 		</method>
 		<method name="set_db_name">
@@ -104,6 +113,12 @@
 			</description>
 		</method>
 	</methods>
+	<members>
+		<member name="is_connected_db" type="bool" setter="" getter="is_connected_db" default="false">
+		</member>
+		<member name="last_error" type="int" setter="" getter="get_last_error_code" enum="MariaDBConnector.ErrorCode" default="0">
+		</member>
+	</members>
 	<constants>
 		<constant name="IP_TYPE_IPV4" value="1" enum="IpType">
 		</constant>
@@ -160,6 +175,8 @@
 		<constant name="ERR_INVALID_PORT" value="21" enum="ErrorCode">
 		</constant>
 		<constant name="ERR_UNKNOWN" value="22" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_PACKET" value="23" enum="ErrorCode">
 		</constant>
 	</constants>
 </class>
