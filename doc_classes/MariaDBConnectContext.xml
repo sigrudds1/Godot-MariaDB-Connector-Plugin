@@ -24,10 +24,13 @@
 			Hostname or IP address of the MariaDB server.
 		</member>
 		<member name="is_prehashed" type="bool" setter="set_is_prehashed" getter="get_is_prehashed" default="true">
-			Indicates if the password is already hashed before being sent.
+			Indicates if the password has already been hashed client-side.
+			If true, with AUTH_TYPE_MYSQL_NATIVE the password must be the SHA-1 hash of the raw password; with AUTH_TYPE_ED25519 it must be the SHA-512 hash of the raw password.
 		</member>
 		<member name="password" type="String" setter="set_password" getter="get_password" default="&quot;&quot;">
-			Password or pre-hashed password string.
+			The password or pre-hashed password string.
+			When is_prehashed is true, the value must match the hash algorithm implied by auth_type, and since raw hash outputs are binary (they may contain null characters), you must set encoding to ENCODE_BASE64 (and supply the Base64-encoded hash) or ENCODE_HEX (and supply the hex-encoded hash).
+			When is_prehashed is false, this is the plain-text UTF-8 password.
 		</member>
 		<member name="port" type="int" setter="set_port" getter="get_port" default="3306">
 			Port used to connect to the MariaDB server.

@@ -241,6 +241,7 @@ public:
 	ErrorCode connect_db_ctx(const Ref<MariaDBConnectContext> &p_context);
 	void disconnect_db();
 	Dictionary excecute_command(const String &sql_stmt);
+	static Ref<MariaDBConnector> connection_instance(const Ref<MariaDBConnectContext> &p_context);
 	ErrorCode get_last_error() const { return _last_error; }
 	PackedByteArray get_last_query_converted();
 	PackedByteArray get_last_response();

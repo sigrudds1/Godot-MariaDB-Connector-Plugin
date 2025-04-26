@@ -20,16 +20,64 @@
 			<param index="6" name="is_prehashed" type="bool" default="true" />
 			<description>
 				Establishes a connection to the MariaDB server using the provided host, port, database name, username, and password.
+				[codeblock]
 				If is_prehashed = true then
-				   If authtype = AUTH_TYPE_MYSQL_NATIVE, the password string must be sha1 hex hash of the plain password.
-				   If authtype = AUTH_TYPE_ED25519, the password string must be sha512 hex hash of the plain password.
+				    If authtype = AUTH_TYPE_MYSQL_NATIVE, the password string must be sha1 hex hash of the plain password.
+				    If authtype = AUTH_TYPE_ED25519, the password string must be sha512 hex hash of the plain password.
+				[/codeblock]
+				[codeblock lang=gdscript]
+				var err: MariaDBConnector.ErrorCode = db.connect_db(
+				    "localhost",
+				    3306,
+				    "some_db_name",
+				    "some_username",
+				    "sha512_encrypted_password_to_hex_string",
+				    MariaDBConnector.AUTH_TYPE_ED25519,
+				    true)
+
+				if err != MariaDBConnector.ErrorCode.OK:
+				    push_error(err)
+				    return
+				[/codeblock]
 			</description>
 		</method>
 		<method name="connect_db_ctx">
 			<return type="int" enum="MariaDBConnector.ErrorCode" />
 			<param index="0" name="mariadb_connect_context" type="MariaDBConnectContext" />
 			<description>
-				Uses thw MariaDBConnectContext class as a parameter for connection parameters.
+				Establishes a connection to the MariaDB server using a context.
+				[codeblock lang=gdscript]
+				var ctx := MariaDBConnectContext.new()
+				# Using defaults for unlisted members.
+				ctx.db_name = "some_db"
+				ctx.username = "some_db_user"
+				ctx.password = "db_users_password_sha512_base64_hashed_encoded"
+
+				var db :=  MariaDBConnector.new()
+				var err: MariaDBConnector.ErrorCode = db.connect_db_ctx(ctx)
+				if err != MariaDBConnector.ErrorCode.OK:
+				    push_error(err)
+				    return
+				[/codeblock]
+			</description>
+		</method>
+		<method name="connection_instance" qualifiers="static">
+			<return type="MariaDBConnector" />
+			<param index="0" name="mariadb_connect_context" type="MariaDBConnectContext" />
+			<description>
+				Static member that returns a connected MariaDBConnector instance or null.
+				[codeblock lang=gdscript]
+				var ctx := MariaDBConnectContext.new()
+				# Using defaults for unlisted members.
+				ctx.db_name = "some_db"
+				ctx.username = "some_db_user"
+				ctx.password = "db_users_password_sha512_hashed_base64_encoded"
+
+				var db := MariaDBConnector.connection_instance(ctx)
+				if db == null:
+				    # Error is already printed by the addon.
+				    return
+				[/codeblock]
 			</description>
 		</method>
 		<method name="disconnect_db">
@@ -44,6 +92,15 @@
 			<description>
 				Returns a [Dictionary] with the affected_rows, last_insert_id, status_flags, warnings, and info for all 
 					none SELECT command types like INSERT, UPDATE, DELETE, BEGIN, COMMIT and ROLLBACK.
+				[codeblock lang=gdscript]
+				var stmt: String = "INSERT INTO table_name (val) VALUES (1234);"
+				var res: Dictionary = db.execute_command(stmt)
+				if db.last_error != MariaDBConnector.ErrorCode.OK:
+				    printerr("Error %d on INSERT" % [db.last_error]) 
+				else:
+				    print("rows affected:", res["affected_rows"])
+				    print("Last Inserted ID:", res["last_insert_id"])
+				[/codeblock]
 			</description>
 		</method>
 		<method name="get_last_error" qualifiers="const">
@@ -81,7 +138,16 @@
 			<return type="Dictionary[]" />
 			<param index="0" name="sql_stmt" type="String" />
 			<description>
-				Works thw same as query except returns a strict type [Array][[Dictionary]] instead of Variant, use last_error to check for error.
+				Strict typed return of [Array][[Dictionary]] instead of Variant, use last_error to check for error.
+				[codeblock lang=gdscript]
+				var stmt: String = "SELECT * FROM table_name;"
+				var rows: Array[Dictionary] = db.select_query(stmt)
+				if db.last_error == MariaDBConnector.ErrorCode.OK:
+				   for row:Dictionary in rows:
+				       print("row:", row)
+				else:
+				   printerr("Error %d on sSELECT" % [db.last_error])
+				[/codeblock]
 			</description>
 		</method>
 		<method name="set_db_name">
@@ -115,8 +181,10 @@
 	</methods>
 	<members>
 		<member name="is_connected_db" type="bool" setter="" getter="is_connected_db" default="false">
+			True if client is still conneced to the MariaDB server, this is not 100%, someimtes, when timeout occurs (about ~20min), MariaiDB will drop a connection without closing the socket.
 		</member>
 		<member name="last_error" type="int" setter="" getter="get_last_error_code" enum="MariaDBConnector.ErrorCode" default="0">
+			Holds the ErrorCode of the last function and updated on every function call.
 		</member>
 	</members>
 	<constants>

@@ -55,6 +55,7 @@ func _ready() -> void:
 	print("argon2 hash: %s" % hashed)
 	
 	context_connection()
+	instantiated_connection()
 
 
 func _exit_tree() -> void:
@@ -63,10 +64,10 @@ func _exit_tree() -> void:
 
 func context_connection() -> void:
 	var ctx := MariaDBConnectContext.new()
-	ctx.hostname = ed["db_hostname"]
+	ctx.hostname = ed["db_hostname"] as String
 	ctx.port = ed["db_port"]
-	ctx.db_name = ed["db_name"]
-	ctx.username = ed["db_ed_user"]
+	ctx.db_name = ed["db_name"] as String
+	ctx.username = ed["db_ed_user"] as String
 	ctx.password = ed["db_sha512_hashed_pwd_b64"] as String
 	# You can now store passwords as base64
 	ctx.encoding = MariaDBConnectContext.ENCODE_BASE64 # Default, for exmaple only
@@ -75,7 +76,7 @@ func context_connection() -> void:
 	ctx.auth_type = MariaDBConnectContext.AUTH_TYPE_ED25519 # Default, for exmaple only
 	
 	var ctx_db := MariaDBConnector.new()
-	var err: int = ctx_db.connect_db_ctx(ctx)
+	var err: MariaDBConnector.ErrorCode = ctx_db.connect_db_ctx(ctx)
 	if err != MariaDBConnector.ErrorCode.OK:
 		push_error(err)
 		return
@@ -104,6 +105,28 @@ func context_connection() -> void:
 		print("rows:", rows)
 	else:
 		printerr("Error %d on select" % [ctx_db.last_error])
+
+
+func instantiated_connection() -> void:
+	var ctx := MariaDBConnectContext.new()
+	ctx.db_name = ed["db_name"] as String
+	ctx.username = ed["db_ed_user"] as String
+	ctx.password = ed["db_sha512_hashed_pwd_b64"] as String
+	
+	var ctx_db := MariaDBConnector.connection_instance(ctx)
+	if ctx_db == null:
+		# Error is already printed by the addon
+		return
+	
+	var stmt: String = "SELECT id, type, zone_id, player_id, map_id FROM " + \
+		"Godot_Test.many_records LIMIT 5;"
+	var rows: Array[Dictionary] = ctx_db.select_query(stmt)
+	if ctx_db.last_error == MariaDBConnector.ErrorCode.OK:
+		for row:Dictionary in rows:
+			print("row:", row)
+	else:
+		printerr("Error %d on select" % [ctx_db.last_error])
+	
 
 
 func print_db_response(pba: PackedByteArray) -> void:
@@ -164,13 +187,13 @@ func _connect_to_db_srvr(p_auth_type: AuthType) -> void:
 					false
 			)
 		AuthType.ED25519_HASHED:
-			err = db.connect_db(
+				err = db.connect_db(
 					ed["db_hostname"],
 					ed["db_port"],
 					ed["db_name"],
 					ed["db_ed_user"],
 					ed["db_sha512_hashed_pwd"],
-					MariaDBConnector.AUTH_TYPE_ED25519,
+					MariaDBConnector.AUTH_TYPE_ED25519
 			)
 	if err:
 		print("db connect err:", err)

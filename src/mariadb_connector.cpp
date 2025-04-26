@@ -67,20 +67,18 @@ void MariaDBConnector::_bind_methods() {
 			D_METHOD("connect_db", "hostname", "port", "database", "username", "password", "authtype", "is_prehashed"),
 			&MariaDBConnector::connect_db, DEFVAL(AUTH_TYPE_ED25519), DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("connect_db_ctx", "mariadb_connect_context"), &MariaDBConnector::connect_db_ctx);
+	ClassDB::bind_static_method("MariaDBConnector", D_METHOD("connection_instance", "mariadb_connect_context"),
+			&MariaDBConnector::connection_instance);
 	ClassDB::bind_method(D_METHOD("disconnect_db"), &MariaDBConnector::disconnect_db);
 	ClassDB::bind_method(D_METHOD("execute_command", "sql_stmt"), &MariaDBConnector::excecute_command);
-
 	ClassDB::bind_method(D_METHOD("get_last_query_converted"), &MariaDBConnector::get_last_query_converted);
 	ClassDB::bind_method(D_METHOD("get_last_response"), &MariaDBConnector::get_last_response);
 	ClassDB::bind_method(D_METHOD("get_last_transmitted"), &MariaDBConnector::get_last_transmitted);
 	ClassDB::bind_method(D_METHOD("get_last_error"), &MariaDBConnector::get_last_error);
 	ClassDB::bind_method(D_METHOD("get_last_error_code"), &MariaDBConnector::get_last_error);
-
 	ClassDB::bind_method(D_METHOD("is_connected_db"), &MariaDBConnector::is_connected_db);
-
 	ClassDB::bind_method(D_METHOD("select_query", "sql_stmt"), &MariaDBConnector::select_query);
 	ClassDB::bind_method(D_METHOD("query", "sql_stmt"), &MariaDBConnector::query);
-
 	ClassDB::bind_method(D_METHOD("set_dbl_to_string", "is_to_str"), &MariaDBConnector::set_dbl_to_string);
 	ClassDB::bind_method(D_METHOD("set_db_name", "db_name"), &MariaDBConnector::set_db_name);
 	ClassDB::bind_method(D_METHOD("set_ip_type", "type"), &MariaDBConnector::set_ip_type);
@@ -767,6 +765,31 @@ void MariaDBConnector::disconnect_db() {
 }
 
 Dictionary MariaDBConnector::excecute_command(const String &p_sql_stmt) { return _query(p_sql_stmt, true); }
+
+Ref<MariaDBConnector> MariaDBConnector::connection_instance(const Ref<MariaDBConnectContext> &p_context) {
+	ERR_FAIL_COND_V_EDMSG(p_context.is_null(), Ref<MariaDBConnector>(), "ConnectionContext is null.");
+
+	const int encoding = p_context->get_encoding();
+	String password = p_context->get_password();
+	const bool is_prehashed = p_context->get_is_prehashed();
+
+	if (encoding == MariaDBConnectContext::ENCODE_BASE64) {
+		password = Marshalls::get_singleton()->base64_to_raw(password).hex_encode();
+	} else if (is_prehashed && encoding == MariaDBConnectContext::ENCODE_PLAIN) {
+		password = password.to_utf8_buffer().hex_encode();
+	}
+
+	Ref<MariaDBConnector> conn;
+	conn.instantiate();
+
+	ErrorCode err = conn->connect_db(p_context->get_hostname(), p_context->get_port(), p_context->get_db_name(),
+			p_context->get_username(), password, static_cast<AuthType>(p_context->get_auth_type()), is_prehashed);
+
+	ERR_FAIL_COND_V_EDMSG(
+			err != ErrorCode::OK, Ref<MariaDBConnector>(), vformat("Failed to connect: error code %d", int(err)));
+
+	return conn;
+}
 
 PackedByteArray MariaDBConnector::get_last_query_converted() { return _last_query_converted; }
 
