@@ -64,6 +64,8 @@ If you find this project useful and would like to support development, consider 
 - [Ko-fi](https://ko-fi.com/vikingtinkerer)
 
 ## Version Updates Summary
+v1.5.0 - Added static member connect_instance, doc additions and updates, added gdscript examples in demo. MariaDBConnector::connect_instance returns a connected MariaDBConnector instance bypassing the need for the new() constructor and a connect_db... method.
+
 v1.4.0 - Added new breakout methods for query and supporting last_error member variable to test for errors, context method name was changed, added gdscript examples in demo.
 
 v1.3.0 - Added a connection method to faacilitate base64 encoded baswords with a supporting context class.
