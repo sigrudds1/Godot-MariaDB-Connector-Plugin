@@ -32,6 +32,8 @@ AssetLib addons require moderator approval, the AssetLib version may be behind r
 ## Usage
 For detailed usage examples, please refer to the **Demo Project** included in the repository.
 
+You can also watch my [Youtube Tutorials](https://www.youtube.com/@sigrudgamedev/playlists).
+
 You can find the demo inside the `demo/` folder, which demonstrates how to:
 
 - Connect to a MariaDB database.
@@ -43,6 +45,11 @@ You can find the demo inside the `demo/` folder, which demonstrates how to:
 
 Unlike many other database connectors, this plugin is licensed under **MIT**, not **GPL**. Although **MariaDB itself is GPL**, this connector **only communicates with MariaDB servers via standard network protocols**—meaning it does **not** fall under GPL’s derivative work restrictions. This ensures **no licensing conflicts** when using this plugin in **closed-source** or **commercial** Godot projects.
 
+## Support
+Join my [Discord Server](https://discord.gg/jJe2eFfjGd) for help and feedback.
+
+For issues, open a ticket on [GitHub Issues](https://github.com/sigrudds1/Godot-MariaDB-Connector-Plugin/issues).
+
 ## Contributing
 
 1. Fork the repository.
@@ -51,11 +58,6 @@ Unlike many other database connectors, this plugin is licensed under **MIT**, no
 4. Submit a Pull Request.
 
 You can find the build instructions at [Godot Docs](https://docs.godotengine.org/en/stable/tutorials/scripting/gdextension/gdextension_cpp_example.html).
-
-## Support
-Join my [Discord Server](https://discord.gg/jJe2eFfjGd) for help and feedback.
-
-For issues, open a ticket on [GitHub Issues](https://github.com/sigrudds1/Godot-MariaDB-Connector-Plugin/issues).
 
 ## Donations
 If you find this project useful and would like to support development, consider donating:
