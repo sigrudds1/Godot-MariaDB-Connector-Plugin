@@ -32,7 +32,7 @@ AssetLib addons require moderator approval, the AssetLib version may be behind r
 ## Usage
 For detailed usage examples, please refer to the **Demo Project** included in the repository.
 
-You can also watch my [Youtube Tutorials](https://www.youtube.com/@sigrudgamedev/playlists).
+You can also watch my [Youtube Tutorials](https://www.youtube.com/@sigrudgamedev/playlists) and checkout the series [Projects](https://github.com/sigrudds1/godot-4-mariadb-multiplayer-tutorial-series).
 
 You can find the demo inside the `demo/` folder, which demonstrates how to:
 
