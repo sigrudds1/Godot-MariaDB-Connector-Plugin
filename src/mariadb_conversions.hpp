@@ -1,12 +1,8 @@
 /*************************************************************************/
-/*  mariadb_conversions.h                                                */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
+/*  mariadb_conversions.hpp                                              */
 /*************************************************************************/
 /*                     This file is part of the                          */
-/*                     MariaDB connection module                         */
+/*                      MariaDBConnector addon                           */
 /*                    for use in the Godot Engine                        */
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
@@ -40,37 +36,24 @@
 using namespace godot;
 
 template <typename T>
-inline T bytes_to_num_itr_pos(const uint8_t *src, const size_t byte_count, size_t &start_pos)
-{
+inline T bytes_to_num_adv_itr(const uint8_t *p_src, const size_t byte_count, size_t &start_pos) {
 	size_t count = byte_count;
 
-	if (sizeof(T) < byte_count)
-		count = sizeof(T);
+	if (sizeof(T) < byte_count) count = sizeof(T);
 
 	T result = 0;
-	for (size_t i = 0; i < count; ++i)
-		result |= static_cast<T>(src[++start_pos]) << (i * 8);
+	result |= static_cast<T>(p_src[start_pos++]);
+	for (size_t i = 1; i < count; ++i) result |= static_cast<T>(p_src[start_pos++]) << (i * 8);
 	return result;
 }
 
-inline PackedByteArray hex_str_to_bytes(const String &hex_str) {
-	PackedByteArray bytes;
-	for (size_t i = 0; i < (size_t)hex_str.length(); i += 2) {
-		String byte_string = hex_str.substr(i, 2);
-		int byte = byte_string.hex_to_int();
-		bytes.push_back(static_cast<uint8_t>(byte));
-	}
-
-	return bytes;
-}
-
- template <typename T>
-inline PackedByteArray little_endian_to_vbytes(const T p_value, const size_t p_max_bytes = 0,
+template <typename T>
+inline PackedByteArray little_endian_to_vbytes(const T p_value,
+		const size_t p_max_bytes = 0,
 		const size_t p_start_idx = 0) {
 	//little endian bytes
 	size_t count = sizeof(T);
-	if (p_max_bytes > 0 && p_max_bytes <= count)
-		count = p_max_bytes;
+	if (p_max_bytes > 0 && p_max_bytes <= count) count = p_max_bytes;
 
 	PackedByteArray vec;
 	for (size_t i = 0 + p_start_idx; i < count + p_start_idx; i++) {
@@ -93,7 +76,6 @@ inline PackedByteArray little_endian_to_vbytes(const T p_value, const size_t p_m
 // 	return out;
 // }
 
-
 // TODO DO we need other character sets?
 // String vbytes_to_ascii_itr_at(const PackedByteArray &p_src_buf, size_t &p_last_pos, size_t p_byte_cnt) {
 // 	String rtn;
@@ -113,14 +95,13 @@ inline PackedByteArray little_endian_to_vbytes(const T p_value, const size_t p_m
  * \param byte_cnt	size_t byte count to be copied from the packet buffer.
  * \return			String.
  */
-String vbytes_to_utf8_itr_at(const PackedByteArray &p_src_buf, size_t &p_last_pos, const size_t p_byte_cnt) {
-	if (p_byte_cnt <= 0 || p_last_pos + p_byte_cnt > (size_t)p_src_buf.size()){
+String vbytes_to_utf8_adv_itr(const PackedByteArray &p_src_buf, size_t &p_last_pos, const size_t p_byte_cnt) {
+	if (p_byte_cnt <= 0 || p_last_pos + p_byte_cnt > (size_t)p_src_buf.size()) {
 		return "";
 	}
 
 	String rtn_val;
-	rtn_val.parse_utf8((const char *)p_src_buf.ptr() + p_last_pos + 1, p_byte_cnt);
+	rtn_val.parse_utf8((const char *)p_src_buf.ptr() + p_last_pos, p_byte_cnt);
 	p_last_pos += p_byte_cnt;
 	return rtn_val;
 }
-

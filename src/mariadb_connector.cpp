@@ -30,6 +30,7 @@
 /*************************************************************************/
 
 #include "mariadb_connector.hpp"
+
 #include "ed25519_ref10/ed25519_auth.h"
 #include "mariadb_conversions.hpp"
 #include "mbedtls/sha1.h"
@@ -42,6 +43,36 @@
 #include <godot_cpp/variant/utility_functions.hpp>
 
 using namespace godot;
+
+static uint64_t _decode_lenenc_adv_itr(const PackedByteArray &p_buf, size_t &p_pkt_idx) {
+	uint8_t marker = p_buf[p_pkt_idx++];
+	if (marker < 0xFB) {
+		return marker;
+	} else if (marker == 0xFB /* NULL */) {
+		// Can't return NULL but len will not be larger than FFFFFFFFFFFFFFFE so we can test for UINT64_MAX
+		return UINT64_MAX;
+	} else if (marker == 0xFC) {
+		uint64_t v = p_buf[p_pkt_idx++];
+		v |= uint64_t(p_buf[p_pkt_idx++]) << 8;
+		return v;
+	} else if (marker == 0xFD) {
+		uint64_t v = p_buf[p_pkt_idx++];
+		v |= uint64_t(p_buf[p_pkt_idx++]) << 8;
+		v |= uint64_t(p_buf[p_pkt_idx++]) << 16;
+		return v;
+	} else if (marker == 0xFE) {
+		uint64_t v = uint64_t(p_buf[p_pkt_idx++]);
+		v |= uint64_t(p_buf[p_pkt_idx++]) << 8;
+		v |= uint64_t(p_buf[p_pkt_idx++]) << 16;
+		v |= uint64_t(p_buf[p_pkt_idx++]) << 24;
+		uint64_t hi = uint64_t(p_buf[p_pkt_idx++]);
+		hi |= uint64_t(p_buf[p_pkt_idx++]) << 8;
+		hi |= uint64_t(p_buf[p_pkt_idx++]) << 16;
+		hi |= uint64_t(p_buf[p_pkt_idx++]) << 24;
+		return (hi << 32) | v;
+	}
+	return marker;
+}
 
 static inline PackedByteArray _sha1(const PackedByteArray &p_data) {
 	PackedByteArray output;
@@ -65,9 +96,12 @@ MariaDBConnector::~MariaDBConnector() { disconnect_db(); }
 void MariaDBConnector::_bind_methods() {
 	ClassDB::bind_method(
 			D_METHOD("connect_db", "hostname", "port", "database", "username", "password", "authtype", "is_prehashed"),
-			&MariaDBConnector::connect_db, DEFVAL(AUTH_TYPE_ED25519), DEFVAL(true));
+			&MariaDBConnector::connect_db,
+			DEFVAL(AUTH_TYPE_ED25519),
+			DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("connect_db_ctx", "mariadb_connect_context"), &MariaDBConnector::connect_db_ctx);
-	ClassDB::bind_static_method("MariaDBConnector", D_METHOD("connection_instance", "mariadb_connect_context"),
+	ClassDB::bind_static_method("MariaDBConnector",
+			D_METHOD("connection_instance", "mariadb_connect_context"),
 			&MariaDBConnector::connection_instance);
 	ClassDB::bind_method(D_METHOD("disconnect_db"), &MariaDBConnector::disconnect_db);
 	ClassDB::bind_method(D_METHOD("execute_command", "sql_stmt"), &MariaDBConnector::excecute_command);
@@ -79,6 +113,13 @@ void MariaDBConnector::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_connected_db"), &MariaDBConnector::is_connected_db);
 	ClassDB::bind_method(D_METHOD("select_query", "sql_stmt"), &MariaDBConnector::select_query);
 	ClassDB::bind_method(D_METHOD("query", "sql_stmt"), &MariaDBConnector::query);
+
+	ClassDB::bind_method(D_METHOD("prepared_statement", "sql"), &MariaDBConnector::prepared_statement);
+	ClassDB::bind_method(D_METHOD("exec_prepped_select", "stmt_id", "params"), &MariaDBConnector::exec_prepped_select);
+	ClassDB::bind_method(
+			D_METHOD("exec_prepped_command", "stmt_id", "params"), &MariaDBConnector::exec_prepped_command);
+	ClassDB::bind_method(D_METHOD("close_statement", "stmt_id"), &MariaDBConnector::close_statement);
+
 	ClassDB::bind_method(D_METHOD("set_dbl_to_string", "is_to_str"), &MariaDBConnector::set_dbl_to_string);
 	ClassDB::bind_method(D_METHOD("set_db_name", "db_name"), &MariaDBConnector::set_db_name);
 	ClassDB::bind_method(D_METHOD("set_ip_type", "type"), &MariaDBConnector::set_ip_type);
@@ -118,34 +159,54 @@ void MariaDBConnector::_bind_methods() {
 	BIND_ENUM_CONSTANT(ERR_INVALID_PORT);
 	BIND_ENUM_CONSTANT(ERR_UNKNOWN);
 	BIND_ENUM_CONSTANT(ERR_PACKET);
+	BIND_ENUM_CONSTANT(ERR_PREPARE_FAILED);
+
+	BIND_ENUM_CONSTANT(FIELD_TYPE_DECIMAL);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_TINY);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_UTINY);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_SHORT);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_USHORT);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_LONG);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_ULONG);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_FLOAT);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_DOUBLE);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_NULL);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_TIMESTAMP);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_LONGLONG);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_ULONGLONG);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_INT24);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_UINT24);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_DATE);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_TIME);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_DATETIME);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_YEAR);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_NEWDATE);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_VARCHAR);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_BIT);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_JSON);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_NEWDECIMAL);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_ENUM);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_SET);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_TINY_BLOB);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_MEDIUM_BLOB);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_LONG_BLOB);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_BLOB);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_VAR_STRING);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_STRING);
+	BIND_ENUM_CONSTANT(FIELD_TYPE_GEOMETRY);
 }
 
 // Custom Functions
 // private
-void MariaDBConnector::m_add_packet_header(PackedByteArray &p_pkt, uint8_t p_pkt_seq) {
+void MariaDBConnector::_add_packet_header(PackedByteArray &p_pkt, uint8_t p_pkt_seq) {
 	PackedByteArray t = little_endian_to_vbytes(p_pkt.size(), 3);
 	t.push_back(p_pkt_seq);
 	t.append_array(p_pkt);
 	p_pkt = t.duplicate();
 }
 
-MariaDBConnector::ErrorCode MariaDBConnector::_rcv_bfr_chk(
-		PackedByteArray &p_bfr, int &p_bfr_size, const size_t p_cur_pos, const size_t p_bytes_needed) {
-	if (p_bfr_size - p_cur_pos < p_bytes_needed)
-		p_bfr.append_array(m_recv_data(_server_timout_msec));
-	// m_append_thread_data(p_bfr);
-
-	p_bfr_size = p_bfr.size();
-	if (p_bfr_size - p_cur_pos < p_bytes_needed) {
-		return MariaDBConnector::ErrorCode::ERR_PACKET_LENGTH_MISMATCH;
-	} else {
-		return MariaDBConnector::ErrorCode::OK;
-	}
-}
-
-// client protocol 4.1
-MariaDBConnector::ErrorCode MariaDBConnector::m_client_protocol_v41(
-		const AuthType p_srvr_auth_type, const PackedByteArray p_srvr_salt) {
+MariaDBConnector::ErrorCode MariaDBConnector::_client_protocol_v41(const AuthType p_srvr_auth_type,
+		const PackedByteArray p_srvr_salt) {
 	PackedByteArray srvr_response_pba;
 	PackedByteArray srvr_auth_msg_pba;
 	uint8_t seq_num = 0;
@@ -156,7 +217,7 @@ MariaDBConnector::ErrorCode MariaDBConnector::m_client_protocol_v41(
 	_client_capabilities = 0;
 	_client_capabilities |= (_server_capabilities & (uint64_t)Capabilities::CLIENT_MYSQL);
 	// client_capabilities |= (uint64_t)Capabilities::FOUND_ROWS;
-	_client_capabilities |= (uint64_t)Capabilities::LONG_FLAG; //??
+	_client_capabilities |= (uint64_t)Capabilities::LONG_FLAG;	//??
 	_client_capabilities |= (_server_capabilities & (uint64_t)Capabilities::CONNECT_WITH_DB);
 	_client_capabilities |= (uint64_t)Capabilities::LOCAL_FILES;
 	_client_capabilities |= (uint64_t)Capabilities::CLIENT_PROTOCOL_41;
@@ -176,10 +237,10 @@ MariaDBConnector::ErrorCode MariaDBConnector::m_client_protocol_v41(
 	// statements? _client_capabilities |= (_server_capabilities &
 	// (uint64_t)Capabilities::CLIENT_SEND_CONNECT_ATTRS);
 
-	_client_capabilities |= (uint64_t)Capabilities::CAN_HANDLE_EXPIRED_PASSWORDS; //??
+	_client_capabilities |= (uint64_t)Capabilities::CAN_HANDLE_EXPIRED_PASSWORDS;  //??
 	_client_capabilities |= (uint64_t)Capabilities::SESSION_TRACK;
 	_client_capabilities |= (_server_capabilities & (uint64_t)Capabilities::CLIENT_DEPRECATE_EOF);
-	_client_capabilities |= (uint64_t)Capabilities::REMEMBER_OPTIONS; //??
+	_client_capabilities |= (uint64_t)Capabilities::REMEMBER_OPTIONS;  //??
 
 	// Only send the first 4 bytes(32 bits) of capabilities the remaining will be
 	// sent later in another 4 byte
@@ -194,7 +255,7 @@ MariaDBConnector::ErrorCode MariaDBConnector::m_client_protocol_v41(
 
 	// TODO Find Collation list, create enum and setter
 	//  int<1> client character collation
-	send_buffer_pba.push_back(33); // utf8_general_ci
+	send_buffer_pba.push_back(33);	// utf8_general_ci
 
 	// string<19> reserved
 	// send_buffer_vec.insert(send_buffer_vec.end(), 19, 0);
@@ -229,7 +290,7 @@ MariaDBConnector::ErrorCode MariaDBConnector::m_client_protocol_v41(
 
 	// string<NUL> username
 	send_buffer_pba.append_array(_username);
-	send_buffer_pba.push_back(0); // NUL terminated
+	send_buffer_pba.push_back(0);  // NUL terminated
 
 	PackedByteArray auth_response_pba;
 	if (p_srvr_auth_type == AUTH_TYPE_MYSQL_NATIVE && (_client_auth_type == AUTH_TYPE_MYSQL_NATIVE)) {
@@ -249,31 +310,31 @@ MariaDBConnector::ErrorCode MariaDBConnector::m_client_protocol_v41(
 	} else {
 		// else string<NUL> authentication response null ended
 		send_buffer_pba.append_array(auth_response_pba);
-		send_buffer_pba.push_back(0); // NUL terminated
+		send_buffer_pba.push_back(0);  // NUL terminated
 	}
 
 	// if (server_capabilities & CLIENT_CONNECT_WITH_DB)
 	// string<NUL> default database name
 	if (_client_capabilities & (uint64_t)Capabilities::CONNECT_WITH_DB) {
 		send_buffer_pba.append_array(_dbname);
-		send_buffer_pba.push_back(0); // NUL terminated
+		send_buffer_pba.push_back(0);  // NUL terminated
 	}
 
 	// if (server_capabilities & CLIENT_PLUGIN_AUTH)
 	// string<NUL> authentication plugin name
 	PackedByteArray auth_plugin_name_pba = kAuthTypeNames[(size_t)AUTH_TYPE_MYSQL_NATIVE].to_ascii_buffer();
 	send_buffer_pba.append_array(auth_plugin_name_pba);
-	send_buffer_pba.push_back(0); // NUL terminated
+	send_buffer_pba.push_back(0);  // NUL terminated
 
 	// Implementing CLIENT_SEND_CONNECT_ATTRS will just add more data, I don't
 	// think it is needed for game dev use if (server_capabilities &
 	// CLIENT_SEND_CONNECT_ATTRS) int<lenenc> size of connection attributes while
 	// packet has remaining data string<lenenc> key string<lenenc> value
 
-	m_add_packet_header(send_buffer_pba, ++seq_num);
+	_add_packet_header(send_buffer_pba, ++seq_num);
 	_stream->put_data(send_buffer_pba);
 
-	srvr_response_pba = m_recv_data(_server_timout_msec);
+	srvr_response_pba = _read_buffer(_server_timout_msec);
 	size_t itr = 4;
 
 	if (srvr_response_pba.size() > 0) {
@@ -285,9 +346,9 @@ MariaDBConnector::ErrorCode MariaDBConnector::m_client_protocol_v41(
 			_authenticated = true;
 			return ErrorCode::OK;
 		} else if (status == 0xFE) {
-			user_auth_type = m_get_server_auth_type(m_find_vbytes_str_at(srvr_response_pba, itr));
+			user_auth_type = _get_server_auth_type(_parse_null_utf8_at_adv_idx(srvr_response_pba, itr));
 		} else if (status == 0xFF) {
-			m_handle_server_error(srvr_response_pba, itr);
+			_handle_server_error(srvr_response_pba, itr);
 			_authenticated = false;
 			return ErrorCode::ERR_AUTH_FAILED;
 		} else {
@@ -297,7 +358,6 @@ MariaDBConnector::ErrorCode MariaDBConnector::m_client_protocol_v41(
 	}
 
 	if (user_auth_type == AUTH_TYPE_ED25519 && _client_auth_type == AUTH_TYPE_ED25519) {
-		// print_line(("using AUTH_TYPE_ED25519"));
 		// srvr_auth_msg.assign(srvr_response.begin() + itr + 1,
 		// srvr_response.end());
 		srvr_auth_msg_pba.append_array(srvr_response_pba.slice(itr + 1));
@@ -307,7 +367,7 @@ MariaDBConnector::ErrorCode MariaDBConnector::m_client_protocol_v41(
 		return ErrorCode::ERR_AUTH_PROTOCOL_MISMATCH;
 	}
 
-	m_add_packet_header(send_buffer_pba, ++seq_num);
+	_add_packet_header(send_buffer_pba, ++seq_num);
 
 	Error err = _stream->put_data(send_buffer_pba);
 	if (err != Error::OK) {
@@ -315,7 +375,7 @@ MariaDBConnector::ErrorCode MariaDBConnector::m_client_protocol_v41(
 		return ErrorCode::ERR_SEND_FAILED;
 	}
 
-	srvr_response_pba = m_recv_data(_server_timout_msec);
+	srvr_response_pba = _read_buffer(_server_timout_msec);
 
 	if (srvr_response_pba.size() > 0) {
 		// 4th byte is seq should be 2
@@ -325,7 +385,7 @@ MariaDBConnector::ErrorCode MariaDBConnector::m_client_protocol_v41(
 		if (srvr_response_pba[itr] == 0x00) {
 			_authenticated = true;
 		} else if (srvr_response_pba[itr] == 0xFF) {
-			m_handle_server_error(srvr_response_pba, itr);
+			_handle_server_error(srvr_response_pba, itr);
 			_authenticated = false;
 			return ErrorCode::ERR_AUTH_FAILED;
 		} else {
@@ -337,7 +397,106 @@ MariaDBConnector::ErrorCode MariaDBConnector::m_client_protocol_v41(
 	return ErrorCode::OK;
 }
 
-MariaDBConnector::ErrorCode MariaDBConnector::m_connect() {
+Variant MariaDBConnector::_com_query_response(const bool p_is_command) {
+	/* For interest of speed over memory I am working with the entire buffer
+	 * and keeping track of the iteration point, as most queries for
+	 * game dev should be small but speedy.
+	 */
+	// From MariaDBConnector version 10.2 dep_eof should be true
+
+	PackedByteArray srvr_response = _read_buffer(_server_timout_msec);
+	// m_append_thread_data(srvr_response);
+
+	if (srvr_response.size() == 0) {
+		_last_error = ErrorCode::ERR_NO_RESPONSE;
+		if (p_is_command) {
+			return 0;
+		} else {
+			return (uint32_t)ErrorCode::ERR_NO_RESPONSE;
+		}
+	}
+
+	size_t pkt_idx = 0;
+	// Not doing anything with this value, here, because the buffer may have been
+	// full and more data is needed. So I am using the process time to allow more
+	// to get into the buffer, instead of constantly polling the buffer
+	//	before any work is done, there are more and smaller internal packets
+	// with buffer size checks for every 	sub-packet.
+	size_t pkt_len = bytes_to_num_adv_itr<size_t>(srvr_response.ptr(), 3, pkt_idx);
+
+	// uint8_t seq_num = srvr_response[pkt_idx++];
+	pkt_idx++;
+	/* https://mariadb.com/kb/en/result-set-packets/
+	 * The pkt_idx should be at 3, we are on the 4th byte and wlll iterate before
+	 * use Resultset metadata All segment packets start with packet length(3
+	 * bytes) and sequence number This is a small packet with packet length of 1
+	 * to 9 of 4 to 19 bytes to determine how many columns of data are being sent.
+	 */
+
+	uint64_t col_cnt = 0;
+	uint8_t marker = srvr_response[pkt_idx];
+	// https://mariadb.com/kb/en/protocol-data-types/#length-encoded-integers
+	if (marker == 0xFF) {
+		_handle_server_error(srvr_response, pkt_idx);
+		_last_error = ErrorCode::ERR_PACKET;
+
+		if (p_is_command) {
+			return 0;
+		} else {
+			return (uint32_t)_last_error;
+		}
+	} else if (marker == 0x00) {
+		if (p_is_command) {
+			pkt_idx++;
+			Dictionary result;
+
+			uint64_t affected_rows = _decode_lenenc_adv_itr(srvr_response, pkt_idx);
+			uint64_t last_insert_id = _decode_lenenc_adv_itr(srvr_response, pkt_idx);
+			uint16_t status_flags = srvr_response[pkt_idx++] | (srvr_response[pkt_idx++] << 8);
+			uint16_t warnings = srvr_response[pkt_idx++] | (srvr_response[pkt_idx++] << 8);
+
+			// Info message
+			String info_message = "";
+			if (pkt_idx + 1 < srvr_response.size()) {
+				info_message =
+						String::utf8((const char *)&srvr_response[pkt_idx + 1], srvr_response.size() - (pkt_idx + 1));
+			}
+
+			// Build dictionary
+			result["affected_rows"] = affected_rows;
+			result["last_insert_id"] = last_insert_id;
+			result["status_flags"] = status_flags;
+			result["warnings"] = warnings;
+			result["info"] = info_message;
+
+			return result;
+		}
+		return 0;
+	} else if (marker == 0xFB) {
+		// LOCAL_INFILE Packet if the query was "LOCAL INFILE
+		// https://mariadb.com/kb/en/packet_local_infile/
+	} else {
+		col_cnt = _decode_lenenc_adv_itr(srvr_response, pkt_idx);
+	}
+
+	if (_client_capabilities & (uint64_t)Capabilities::MARIADB_CLIENT_CACHE_METADATA) {
+		pkt_idx++;
+	}
+
+	TypedArray<Dictionary> col_data = _read_columns_data(srvr_response, pkt_idx, col_cnt);
+	//	if not (CLIENT_DEPRECATE_EOF capability set) get EOF_Packet
+	bool dep_eof = (_client_capabilities & (uint64_t)Capabilities::CLIENT_DEPRECATE_EOF);
+	if (!dep_eof) {
+		pkt_idx += 5;  // bypass for now
+	}
+
+	_last_response = PackedByteArray(srvr_response);
+	TypedArray<Dictionary> rows = _parse_string_rows(srvr_response, pkt_idx, col_data, dep_eof);
+
+	return Variant(rows);
+}
+
+MariaDBConnector::ErrorCode MariaDBConnector::_connect() {
 	disconnect_db();
 
 	ErrorCode err;
@@ -379,7 +538,7 @@ MariaDBConnector::ErrorCode MariaDBConnector::m_connect() {
 		return ErrorCode::ERR_CONNECTION_ERROR;
 	}
 
-	PackedByteArray recv_buffer = m_recv_data(_server_timout_msec);
+	PackedByteArray recv_buffer = _read_buffer(_server_timout_msec);
 	if (recv_buffer.size() <= 4) {
 		ERR_PRINT("connect: Receive buffer empty!");
 		return ErrorCode::ERR_UNAVAILABLE;
@@ -420,7 +579,7 @@ MariaDBConnector::ErrorCode MariaDBConnector::m_connect() {
 	 */
 
 	if (recv_buffer[4] == 10) {
-		m_server_init_handshake_v10(recv_buffer);
+		_server_init_handshake_v10(recv_buffer);
 	} else {
 		ERR_PRINT("Unsupported protocol version in handshake packet!");
 		return ErrorCode::ERR_PROTOCOL_MISMATCH;
@@ -430,25 +589,25 @@ MariaDBConnector::ErrorCode MariaDBConnector::m_connect() {
 	// _tcp_thread = std::thread([this] { m_tcp_thread_func(); });
 
 	return ErrorCode::OK;
-} // m_connect
+}  // m_connect
 
-Variant MariaDBConnector::m_get_type_data(const int p_db_field_type, const PackedByteArray p_data) {
+Variant MariaDBConnector::_get_type_data(const int p_db_field_type, const PackedByteArray p_data) {
 	String rtn_val;
 	rtn_val.parse_utf8((const char *)p_data.ptr(), p_data.size());
 	switch (p_db_field_type) {
-		case 1: // MYSQL_TYPE_TINY
-		case 2: // MYSQL_TYPE_SHORT aka SMALLINT
-		case 3: // MYSQL_TYPE_LONG
-		case 8: // MYSQL_TYPE_LONGLONG
-		case 9: // MYSQL_TYPE_INT24 aka MEDIUMINT
-		case 13: // MYSQL_TYPE_YEAR aka SMALLINT
+		case MYSQL_TYPE_TINY:
+		case MYSQL_TYPE_SHORT:	//  aka SMALLINT
+		case MYSQL_TYPE_LONG:
+		case MYSQL_TYPE_LONGLONG:
+		case MYSQL_TYPE_INT24:	// aka MEDIUMINT
+		case MYSQL_TYPE_YEAR:  // aka SMALLINT
 			return rtn_val.to_int();
 			break;
-		case 0: // MYSQL_TYPE_DECIMAL
-		case 4: // MYSQL_TYPE_FLOAT
+		case MYSQL_TYPE_DECIMAL:
+		case MYSQL_TYPE_FLOAT:
 			return rtn_val.to_float();
 			break;
-		case 5: // MYSQL_TYPE_DOUBLE
+		case MYSQL_TYPE_DOUBLE:
 			if (_dbl_to_string) {
 				return rtn_val;
 			} else {
@@ -461,7 +620,7 @@ Variant MariaDBConnector::m_get_type_data(const int p_db_field_type, const Packe
 	return 0;
 }
 
-MariaDBConnector::AuthType MariaDBConnector::m_get_server_auth_type(String p_srvr_auth_name) {
+MariaDBConnector::AuthType MariaDBConnector::_get_server_auth_type(String p_srvr_auth_name) {
 	AuthType server_auth_type = AUTH_TYPE_ED25519;
 	if (p_srvr_auth_name == "mysql_native_password") {
 		server_auth_type = AUTH_TYPE_MYSQL_NATIVE;
@@ -472,13 +631,477 @@ MariaDBConnector::AuthType MariaDBConnector::m_get_server_auth_type(String p_srv
 	return server_auth_type;
 }
 
-PackedByteArray MariaDBConnector::m_recv_data(uint32_t p_timeout, uint32_t p_expected_bytes) {
+void MariaDBConnector::_handle_server_error(const PackedByteArray p_src_buffer, size_t &p_last_pos) {
+	// REF https://mariadb.com/kb/en/err_packet/
+	uint16_t srvr_error_code = (uint16_t)p_src_buffer[p_last_pos++];
+	srvr_error_code += (uint16_t)p_src_buffer[p_last_pos++] << 8;
+	String msg = String::num_uint64((uint64_t)srvr_error_code) + " - ";
+	if (srvr_error_code == 0xFFFF) {
+		// int<1> stage
+		// int<1> max_stage
+		// int<3> progress
+		// string<lenenc> progress_info
+	} else {
+		if (p_src_buffer[p_last_pos] == '#') {
+			msg += "SQL State:";
+			for (size_t itr = 0; itr < 6; ++itr) msg += (char)p_src_buffer[p_last_pos++];
+			msg += " - ";
+			while (p_last_pos < (size_t)p_src_buffer.size() - 1) {
+				msg += (char)p_src_buffer[p_last_pos++];
+			}
+		} else {
+			// string<EOF> human - readable error message
+			while (p_last_pos < (size_t)p_src_buffer.size() - 1) {
+				msg += (char)p_src_buffer[p_last_pos++];
+			}
+		}
+	}
+	ERR_FAIL_COND_EDMSG(srvr_error_code != OK, msg);
+}
+
+String MariaDBConnector::_parse_null_utf8(PackedByteArray p_buf) {
+	size_t start_pos = 0;
+	return _parse_null_utf8_at_adv_idx(p_buf, start_pos);
+}
+
+String MariaDBConnector::_parse_null_utf8_at_adv_idx(PackedByteArray p_buf, size_t &p_start_pos) {
+	String str;
+	while (p_buf[++p_start_pos] != 0 && p_start_pos < (size_t)p_buf.size()) {
+		str += p_buf[p_start_pos];
+	}
+	return str;
+}
+
+PackedByteArray MariaDBConnector::_get_pkt_bytes_adv_idx(const PackedByteArray &p_src_buf,
+		size_t &p_start_pos,
+		const size_t p_byte_cnt) {
+	if (p_byte_cnt <= 0 || p_start_pos + p_byte_cnt > (size_t)p_src_buf.size()) {
+		return PackedByteArray();
+	}
+
+	PackedByteArray rtn;
+	for (size_t i = 0; i < p_byte_cnt; ++i) {
+		rtn.push_back(p_src_buf[p_start_pos++]);
+	}
+	return rtn;
+}
+
+TypedArray<Dictionary> MariaDBConnector::_parse_prepared_exec(PackedByteArray &p_buf,
+		size_t &p_pkt_idx,
+		const TypedArray<Dictionary> &p_col_defs,
+		const bool p_dep_eof) {
+	print_line("p_col_defs:", p_col_defs);
+	const uint32_t col_cnt = p_col_defs.size();
+	int bfr_size;
+
+	if (col_cnt == 0) {
+		// OK-packet handled in
+		return TypedArray<Dictionary>();
+	}
+
+	TypedArray<Dictionary> rows;
+	const int nullmap_bytes = (col_cnt + 7 + 2) / 8;
+
+	print_line("nullmap_bytes:", nullmap_bytes);
+
+	while (true) {
+		// Validate packet header presence (first 4 bytes)
+		_last_error = _rcv_bfr_chk(p_buf, bfr_size, p_pkt_idx, 4);
+		ERR_FAIL_COND_V_EDMSG(_last_error != OK,
+				TypedArray<Dictionary>(),
+				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + 4));
+
+		size_t pkt_len = bytes_to_num_adv_itr<size_t>(p_buf.ptr(), 3, p_pkt_idx);
+		_last_error = _rcv_bfr_chk(p_buf, bfr_size, p_pkt_idx, pkt_len);
+		ERR_FAIL_COND_V_EDMSG(_last_error != OK,
+				TypedArray<Dictionary>(),
+				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + pkt_len));
+
+		print_line("p_pkt_idx:", p_pkt_idx, " pkt_len:", pkt_len);
+
+		uint8_t seq_num = p_buf[p_pkt_idx++];
+		uint8_t header_byte = p_buf[p_pkt_idx++];  // 0x00 or 0xFE
+
+		if (header_byte == 0xFE && pkt_len == 7) {
+			p_pkt_idx += pkt_len;
+			break;
+		}
+
+		print_line("p_pkt_idx:",
+				p_pkt_idx,
+				" nullmap_bytes start  bytes:",
+				p_buf.slice(p_pkt_idx, p_buf.size()).hex_encode());
+		const size_t nullmap_start = p_pkt_idx;
+		p_pkt_idx += nullmap_bytes;	 // Advance past null bitmap
+		print_line("p_pkt_idx:", p_pkt_idx, " remain row bytes:", p_buf.slice(p_pkt_idx, p_buf.size()).hex_encode());
+		Dictionary row;
+		for (uint32_t c = 0; c < col_cnt; ++c) {
+			int byte_i = (c + 2) >> 3;
+			int bit_i = (c + 2) & 7;
+			bool is_null = (p_buf[nullmap_start + byte_i] >> bit_i) & 1;
+
+			const Dictionary &col_meta = p_col_defs[c];
+			int type_code = int(col_meta["field_type"]);
+			bool is_unsigned = int(col_meta["flags"]) & 32;
+			String col_name = String(col_meta["name"]);
+			Variant value;
+			print_line("p_pkt_idx:", p_pkt_idx, " type_code:", type_code, " col:", c + 1);
+			print_line("p_pkt_idx:", p_pkt_idx, " starting bytes:", p_buf.slice(p_pkt_idx, p_buf.size()).hex_encode());
+			if (is_null) {
+				print_line("is_null");
+				value = Variant();
+			} else {
+				switch (MySqlFieldType(type_code)) {
+					case MYSQL_TYPE_TINY:
+						value = bytes_to_num_adv_itr<uint8_t>(p_buf.ptr(), 1, p_pkt_idx);
+						break;
+					case MYSQL_TYPE_SHORT:
+					case MYSQL_TYPE_YEAR:
+						value = bytes_to_num_adv_itr<uint16_t>(p_buf.ptr(), 2, p_pkt_idx);
+						break;
+					case MYSQL_TYPE_INT24:
+						value = bytes_to_num_adv_itr<uint32_t>(p_buf.ptr(), 3, p_pkt_idx);
+						break;
+					case MYSQL_TYPE_LONG:
+						value = bytes_to_num_adv_itr<uint32_t>(p_buf.ptr(), 4, p_pkt_idx);
+						break;
+					case MYSQL_TYPE_FLOAT: {
+						float fval;
+						memcpy(&fval, &p_buf[p_pkt_idx], sizeof(float));
+						p_pkt_idx += sizeof(float);
+						value = fval;
+						break;
+					}
+					case MYSQL_TYPE_LONGLONG:
+						value = bytes_to_num_adv_itr<uint64_t>(p_buf.ptr(), 8, p_pkt_idx);
+						break;
+					case MYSQL_TYPE_DOUBLE: {
+						double dval;
+						memcpy(&dval, &p_buf[p_pkt_idx], sizeof(double));
+						if (_dbl_to_string) {
+							value = vformat("%.9f", dval);
+						} else {
+							value = dval;
+						}
+						p_pkt_idx += sizeof(double);
+						break;
+					}
+					case MYSQL_TYPE_DECIMAL:
+					case MYSQL_TYPE_NEWDECIMAL:
+					case MYSQL_TYPE_STRING:
+					case MYSQL_TYPE_VAR_STRING: {
+						uint64_t field_len = _decode_lenenc_adv_itr(p_buf, p_pkt_idx);
+						if (field_len == UINT64_MAX) {
+							value = "";	 // NULL string
+						} else {
+							String str_val;
+							str_val.parse_utf8((const char *)p_buf.ptr() + p_pkt_idx, field_len);
+							value = str_val;
+							p_pkt_idx += field_len;
+						}
+						break;
+					}
+					case MYSQL_TYPE_TIMESTAMP:
+					case MYSQL_TYPE_DATETIME: {
+						uint8_t ts_len = p_buf[p_pkt_idx++];
+						uint16_t year = bytes_to_num_adv_itr<uint16_t>(p_buf.ptr(), 2, p_pkt_idx);
+						uint8_t month = p_buf[p_pkt_idx++];
+						uint8_t day = p_buf[p_pkt_idx++];
+						uint8_t hour = p_buf[p_pkt_idx++];
+						uint8_t min = p_buf[p_pkt_idx++];
+						uint8_t sec = p_buf[p_pkt_idx++];
+
+						if (ts_len == 11) {
+							uint32_t micro = bytes_to_num_adv_itr<uint32_t>(p_buf.ptr(), 4, p_pkt_idx);
+							value = vformat(
+									"%04d-%02d-%02d %02d:%02d:%02d.%06d", year, month, day, hour, min, sec, micro);
+						} else {
+							value = vformat("%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, min, sec);
+						}
+					} break;
+					default:
+						break;
+				}
+			}
+
+			print_line("p_pkt_idx:", p_pkt_idx, " remaining bytes:", p_buf.slice(p_pkt_idx, p_buf.size()).hex_encode());
+			row[col_name] = value;
+		}
+		rows.append(row);
+	}
+
+	return TypedArray<Dictionary>(rows);
+}
+
+TypedArray<Dictionary> MariaDBConnector::_parse_string_rows(PackedByteArray &p_buf,
+		size_t &p_pkt_idx,
+		const TypedArray<Dictionary> &p_col_defs,
+		const bool p_dep_eof) {
+	TypedArray<Dictionary> rows;
+	int64_t col_cnt = p_col_defs.size();
+	bool done = false;
+	int bfr_size = 0;
+	uint64_t len_encode = 0;
+	// process values
+	while (!done && p_pkt_idx < (size_t)p_buf.size()) {
+		// Last packet (OK-Packet) is always 11 bytes, pkt len code = 3 bytes, seq = 1 byte, pkt
+		// data = 7 bytes
+		_last_error = _rcv_bfr_chk(p_buf, bfr_size, p_pkt_idx, 11);
+		ERR_FAIL_COND_V_EDMSG(_last_error != OK,
+				TypedArray<Dictionary>(),
+				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + 11));
+
+		size_t pkt_len = bytes_to_num_adv_itr<size_t>(p_buf.ptr(), 3, p_pkt_idx);
+		_last_error = _rcv_bfr_chk(p_buf, bfr_size, p_pkt_idx, pkt_len);
+		ERR_FAIL_COND_V_EDMSG(_last_error != OK,
+				TypedArray<Dictionary>(),
+				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + pkt_len));
+		// uint8_t seq_num = srvr_response[p_pkt_idx++];
+		p_pkt_idx++;
+
+		uint8_t marker = p_buf[p_pkt_idx];
+
+		if (marker == 0xFE && p_dep_eof && pkt_len < 0xFFFFFF) {
+			done = true;
+			break;
+		}
+
+		Dictionary dict;
+		// https://mariadb.com/kb/en/protocol-data-types/#length-encoded-strings
+		for (size_t col_idx = 0; col_idx < col_cnt; ++col_idx) {
+			_last_error = _rcv_bfr_chk(p_buf, bfr_size, p_pkt_idx, 2);
+			ERR_FAIL_COND_V_EDMSG(_last_error != OK,
+					TypedArray<Dictionary>(),
+					vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + 2));
+
+			marker = p_buf[p_pkt_idx];
+			if (marker == 0xFF || marker == 0xFB || marker == 0x00) {
+				p_pkt_idx++;
+				// if (marker == 0xFF) // ERR_Packet
+				//
+				// if (arker == 0xFB) - LOCAL_INFILE Packet if the query was "LOCAL INFILE)
+				// if ((marker == 0x00 && !dep_eof /* && pkt_len < 0xFFFFFF */) ||
+				//  		(marker == 0xFE && pkt_len < 0xFFFFFF && dep_eof)) {
+				//  	//OK_Packet
+				//  	done = true;
+				//  	break;
+				//  }
+			} else {
+				if (marker == 0xFE) {
+					// if (marker == 0xFE && pkt_len < 0xFFFFFF && !p_dep_eof){
+					// EOF PACKET
+					// is this possible in COM_QUERY??
+					// }
+					len_encode = 8;
+				} else if (marker == 0xFD) {
+					len_encode = 3;
+				} else if (marker == 0xFC) {
+					len_encode = 2;
+				}
+
+				_last_error = _rcv_bfr_chk(p_buf, bfr_size, p_pkt_idx, len_encode);
+				ERR_FAIL_COND_V_EDMSG(_last_error != OK,
+						TypedArray<Dictionary>(),
+						vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + len_encode));
+
+				len_encode = _decode_lenenc_adv_itr(p_buf, p_pkt_idx);
+				_last_error = _rcv_bfr_chk(p_buf, bfr_size, p_pkt_idx, len_encode);
+				ERR_FAIL_COND_V_EDMSG(_last_error != OK,
+						TypedArray<Dictionary>(),
+						vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + len_encode));
+
+				bool valid = false;
+
+				// NOTE when accessing Dictionaries in C++ you must assign the value to
+				// the expected type or you get undefined and erratic  behavior
+				String field_name = String(p_col_defs[col_idx].get("name", &valid));
+				ERR_FAIL_COND_V_EDMSG(
+						!valid, TypedArray<Dictionary>(), vformat("ERROR: 'name' key is missing at index %d", col_idx));
+
+				if (len_encode > 0) {
+					PackedByteArray data = _get_pkt_bytes_adv_idx(p_buf, p_pkt_idx, len_encode);
+
+					valid = false;
+					int64_t field_type = int64_t(p_col_defs[col_idx].get("field_type", &valid));
+
+					if (!valid) {
+						dict[field_name] = Variant();  // Store empty if missing
+					} else {
+						dict[field_name] = _get_type_data(field_type, data);
+					}
+				} else {
+					dict[field_name] = Variant();
+				}
+			}
+		}
+
+		if (!done) rows.push_back(dict);
+	}
+
+	return rows;
+}
+
+MariaDBConnector::ErrorCode MariaDBConnector::_prepared_params_send(const uint32_t p_stmt_id, const Array &p_params) {
+	const int param_count = p_params.size();
+	const int nullmap_size = (param_count + 7) / 8;
+	size_t params_block_size = 10;	// header size: command + stmt_id + flags + iteration
+
+	if (param_count > 0) {
+		params_block_size += nullmap_size + 1;	// null-bitmap + new_params_bound_flag
+		TypedArray<Dictionary> column_data = _prep_column_data.get(p_stmt_id, TypedArray<Dictionary>());
+		print_line("column_data:", column_data);
+
+		if (column_data.size() < param_count) return ErrorCode::ERR_PREPARE_FAILED;
+
+		for (int i = 0; i < param_count; ++i) {
+			Variant v = p_params[i];
+			Dictionary col_meta = column_data[i];
+			// int field_type = int(col_meta["field_type"]);
+
+			switch (v.get_type()) {
+				case Variant::INT:
+					params_block_size += 2 + 8;
+					break;
+				case Variant::STRING: {
+					int len = v.operator String().to_utf8_buffer().size();
+					params_block_size += 2 + 4 + len;
+					break;
+				}
+				case Variant::NIL:
+					params_block_size += 2;
+					break;
+				default:
+					return ErrorCode::ERR_PREPARE_FAILED;
+			}
+		}
+	}
+
+	PackedByteArray send_buf;
+	send_buf.resize(params_block_size);
+	int offset = 0;
+
+	send_buf[offset++] = 0x17;	// COM_STMT_EXECUTE
+	send_buf.encode_u32(offset, p_stmt_id);
+	offset += 4;
+	send_buf[offset++] = 0x00;	// flags
+	send_buf.encode_u32(offset, 1);	 // iteration count
+	offset += 4;
+
+	if (param_count > 0) {
+		PackedByteArray null_map;
+		null_map.resize(nullmap_size);
+
+		for (int i = 0; i < param_count; ++i) {
+			if (p_params[i].get_type() == Variant::NIL) {
+				int byte_idx = i >> 3;
+				int bit_idx = i & 7;
+				null_map[byte_idx] |= (1 << bit_idx);
+			}
+		}
+
+		for (int b = 0; b < nullmap_size; ++b) {
+			send_buf[offset++] = null_map[b];
+		}
+
+		send_buf[offset++] = 1;	 // new_params_bound_flag
+
+		TypedArray<Dictionary> column_data = _prep_column_data.get(p_stmt_id, TypedArray<Dictionary>());
+
+		for (int i = 0; i < param_count; ++i) {
+			const Variant &v = p_params[i];
+			Dictionary col_meta = column_data[i];
+			int field_type = int(col_meta["field_type"]);
+			bool is_unsigned = int(col_meta["flags"]) & 32;
+
+			if (v.get_type() == Variant::INT) {
+				send_buf.encode_u16(offset, 0x08);	// MYSQL_TYPE_LONGLONG
+				offset += 2;
+				send_buf.encode_u64(offset, int64_t(v));
+				offset += 8;
+			} else if (v.get_type() == Variant::STRING) {
+				send_buf.encode_u16(offset, field_type);
+				offset += 2;
+				PackedByteArray ba = v.operator String().to_utf8_buffer();
+				send_buf.encode_u32(offset, ba.size());
+				offset += 4;
+				for (int j = 0; j < ba.size(); ++j) {
+					send_buf[offset++] = ba[j];
+				}
+			} else if (v.get_type() == Variant::NIL) {
+				send_buf.encode_u16(offset, 0x06);	// MYSQL_TYPE_NULL
+				offset += 2;
+			}
+		}
+	}
+
+	if (offset != int(params_block_size)) {
+		return ErrorCode::ERR_PACKET_LENGTH_MISMATCH;
+	}
+
+	_add_packet_header(send_buf, 0);
+	_stream->put_data(send_buf);
+	return ErrorCode::OK;
+}
+
+Variant MariaDBConnector::_query(const String &p_sql_stmt, const bool p_is_command) {
+	_last_error = ErrorCode::OK;
+	if (!is_connected_db()) {
+		_last_error = ErrorCode::ERR_NOT_CONNECTED;
+		if (p_is_command) {
+			return 0;
+		} else {
+			return ERR_NOT_CONNECTED;
+		}
+	}
+	if (!_authenticated) {
+		_last_error = ErrorCode::ERR_NOT_CONNECTED;
+		if (p_is_command) {
+			return 0;
+		} else {
+			return (uint32_t)ErrorCode::ERR_AUTH_FAILED;
+		}
+	}
+	// _tcp_polling = true;
+
+	PackedByteArray send_buffer_vec;
+
+	send_buffer_vec.push_back(0x03);  // COM_QUERY
+	_last_query_converted = p_sql_stmt.to_utf8_buffer();
+
+	send_buffer_vec.append_array(_last_query_converted);
+	_add_packet_header(send_buffer_vec, 0);
+
+	_last_transmitted = send_buffer_vec;
+	// _tcp_mutex.lock();
+	_stream->put_data(send_buffer_vec);
+	// _tcp_mutex.unlock();
+
+	Variant res = _com_query_response(p_is_command);
+
+	return res;
+}
+
+MariaDBConnector::ErrorCode MariaDBConnector::_rcv_bfr_chk(PackedByteArray &p_bfr,
+		int &p_bfr_size,
+		const size_t p_cur_pos,
+		const size_t p_bytes_needed) {
+	p_bfr_size = p_bfr.size();
+	if (p_bfr_size - p_cur_pos < p_bytes_needed) p_bfr.append_array(_read_buffer(_server_timout_msec));
+
+	p_bfr_size = p_bfr.size();
+	if (p_bfr_size - p_cur_pos < p_bytes_needed) {
+		return MariaDBConnector::ErrorCode::ERR_PACKET_LENGTH_MISMATCH;
+	} else {
+		return MariaDBConnector::ErrorCode::OK;
+	}
+}
+
+PackedByteArray MariaDBConnector::_read_buffer(uint32_t p_timeout, uint32_t p_expected_bytes) {
 	int32_t byte_cnt = 0;
 	PackedByteArray out_buffer;
 	uint64_t start_msec = Time::get_singleton()->get_ticks_msec();
 	uint64_t time_lapse = 0;
 	bool data_rcvd = false;
-	// printf("start\n");
 	while (is_connected_db() && time_lapse < p_timeout) {
 		_stream->poll();
 		byte_cnt = _stream->get_available_bytes();
@@ -494,77 +1117,112 @@ PackedByteArray MariaDBConnector::m_recv_data(uint32_t p_timeout, uint32_t p_exp
 	return out_buffer;
 }
 
-void MariaDBConnector::m_handle_server_error(const PackedByteArray p_src_buffer, size_t &p_last_pos) {
-	// REF https://mariadb.com/kb/en/err_packet/
-	uint16_t srvr_error_code = (uint16_t)p_src_buffer[++p_last_pos];
-	srvr_error_code += (uint16_t)p_src_buffer[++p_last_pos] << 8;
-	String msg = String::num_uint64((uint64_t)srvr_error_code) + " - ";
-	if (srvr_error_code == 0xFFFF) {
-		// int<1> stage
-		// int<1> max_stage
-		// int<3> progress
-		// string<lenenc> progress_info
-	} else {
-		if (p_src_buffer[p_last_pos + 1] == '#') {
-			msg += "SQL State:";
-			for (size_t itr = 0; itr < 6; ++itr)
-				msg += (char)p_src_buffer[++p_last_pos];
-			msg += " - ";
-			while (p_last_pos < (size_t)p_src_buffer.size() - 1) {
-				msg += (char)p_src_buffer[++p_last_pos];
-			}
-		} else {
-			// string<EOF> human - readable error message
-			while (p_last_pos < (size_t)p_src_buffer.size() - 1) {
-				msg += (char)p_src_buffer[++p_last_pos];
-			}
-		}
+TypedArray<Dictionary> MariaDBConnector::_read_columns_data(PackedByteArray &p_srvr_response,
+		size_t &p_pkt_idx,
+		const uint16_t p_col_cnt) {
+	int bfr_size = 0;
+	uint64_t len_encode = 0;
+	TypedArray<Dictionary> col_data;
+
+	//	for each column (i.e column_count times)
+	for (size_t col_idx = 0; col_idx < p_col_cnt; ++col_idx) {
+		_last_error = _rcv_bfr_chk(p_srvr_response, bfr_size, p_pkt_idx, 24);
+		ERR_FAIL_COND_V_EDMSG(_last_error != OK,
+				TypedArray<Dictionary>(),
+				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + 24));
+
+		size_t pkt_len = bytes_to_num_adv_itr<size_t>(p_srvr_response.ptr(), 3, p_pkt_idx);
+		_last_error = _rcv_bfr_chk(p_srvr_response, bfr_size, p_pkt_idx, pkt_len);
+		ERR_FAIL_COND_V_EDMSG(_last_error != OK,
+				TypedArray<Dictionary>(),
+				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + pkt_len));
+		// uint8_t seq_num = p_srvr_response[p_pkt_idx++];
+		p_pkt_idx++;
+
+		//	Column Definition packet
+		// https://mariadb.com/kb/en/result-set-packets/#column-definition-packet
+		//	string<lenenc> catalog (always 'def')
+		len_encode = _decode_lenenc_adv_itr(p_srvr_response, p_pkt_idx);
+		String s = vbytes_to_utf8_adv_itr(p_srvr_response, p_pkt_idx, len_encode);
+
+		//	string<lenenc> schema (database name)
+		len_encode = _decode_lenenc_adv_itr(p_srvr_response, p_pkt_idx);
+		vbytes_to_utf8_adv_itr(p_srvr_response, p_pkt_idx, len_encode);
+
+		//	string<lenenc> table alias
+		len_encode = _decode_lenenc_adv_itr(p_srvr_response, p_pkt_idx);
+		vbytes_to_utf8_adv_itr(p_srvr_response, p_pkt_idx, len_encode);
+
+		//	string<lenenc> table
+		len_encode = _decode_lenenc_adv_itr(p_srvr_response, p_pkt_idx);
+		vbytes_to_utf8_adv_itr(p_srvr_response, p_pkt_idx, len_encode);
+
+		//	string<lenenc> column alias
+		len_encode = _decode_lenenc_adv_itr(p_srvr_response, p_pkt_idx);
+		String column_name = vbytes_to_utf8_adv_itr(p_srvr_response, p_pkt_idx, len_encode);
+
+		//	string<lenenc> column
+		len_encode = _decode_lenenc_adv_itr(p_srvr_response, p_pkt_idx);
+		vbytes_to_utf8_adv_itr(p_srvr_response, p_pkt_idx, len_encode);
+
+		// TODO(sigrudds1) Handle "MariaDBConnector extended capablities" (several
+		// locations)
+		//		if extended type supported (see
+		// MARIADB_CLIENT_EXTENDED_TYPE_INFO ) 			int<lenenc>
+		// length extended info 			loop
+		// int<1> data type: 0x00:type, 0x01: format string<lenenc> value
+
+		//	int<lenenc> length of fixed fields (=0x0C)
+		uint64_t remaining = _decode_lenenc_adv_itr(p_srvr_response, p_pkt_idx);
+
+		//	int<2> character set number
+		uint16_t char_set = bytes_to_num_adv_itr<uint16_t>(p_srvr_response.ptr(), 2, p_pkt_idx);
+
+		// int<4> max. column size the number in parenthesis eg int(10),
+		// varchar(255) uint32_t col_size =
+		uint32_t col_len = bytes_to_num_adv_itr<uint32_t>(p_srvr_response.ptr(), 4, p_pkt_idx);
+
+		//	int<1> Field types
+		// https://mariadb.com/kb/en/result-set-packets/#field-types
+		uint8_t field_type = p_srvr_response[p_pkt_idx++];
+
+		//	int<2> Field detail flag
+		// https://mariadb.com/kb/en/result-set-packets/#field-details-flag
+		uint16_t flags = bytes_to_num_adv_itr<uint16_t>(p_srvr_response.ptr(), 2, p_pkt_idx);
+
+		//	int<1> decimals
+		uint8_t decimals = p_srvr_response[p_pkt_idx++];
+
+		//	int<2> - unused -
+		p_pkt_idx += 2;
+
+		Dictionary column_data;
+		column_data["name"] = column_name;
+		column_data["char_set"] = char_set;
+		column_data["length"] = col_len;
+		column_data["field_type"] = field_type;
+		column_data["flags"] = flags;
+		column_data["decimals"] = decimals;
+
+		col_data.push_back(column_data);
 	}
-	ERR_FAIL_COND_EDMSG(srvr_error_code != OK, msg);
+	return col_data;
 }
 
-String MariaDBConnector::m_find_vbytes_str(PackedByteArray p_buf) {
-	size_t start_pos = 0;
-	return m_find_vbytes_str_at(p_buf, start_pos);
-}
-
-String MariaDBConnector::m_find_vbytes_str_at(PackedByteArray p_buf, size_t &p_start_pos) {
-	String str;
-	while (p_buf[++p_start_pos] != 0 && p_start_pos < (size_t)p_buf.size()) {
-		str += p_buf[p_start_pos];
-	}
-	return str;
-}
-
-PackedByteArray MariaDBConnector::m_get_pkt_bytes(
-		const PackedByteArray &p_src_buf, size_t &p_start_pos, const size_t p_byte_cnt) {
-	PackedByteArray rtn;
-	if (p_byte_cnt <= 0 || p_start_pos + p_byte_cnt > (size_t)p_src_buf.size()) {
-		return rtn;
-	}
-
-	rtn = p_src_buf.slice(p_start_pos, p_start_pos + p_byte_cnt);
-	p_start_pos += p_byte_cnt - 1;
-	return rtn;
-}
-
-size_t MariaDBConnector::m_get_pkt_len_at(const PackedByteArray p_src_buf, size_t &p_start_pos) {
-	size_t len = (size_t)p_src_buf[p_start_pos];
-	len += (size_t)p_src_buf[++p_start_pos] << 8;
-	len += (size_t)p_src_buf[++p_start_pos] << 16;
-	return len;
-}
-
-MariaDBConnector::ErrorCode MariaDBConnector::m_server_init_handshake_v10(const PackedByteArray &p_src_buffer) {
+MariaDBConnector::ErrorCode MariaDBConnector::_server_init_handshake_v10(const PackedByteArray &p_src_buffer) {
 	// nul string - read the 5th byte until the first nul(00), this is server
 	// version string, it is nul terminated
-	size_t pkt_itr = 3;
-	_server_ver_str = "";
-	while (p_src_buffer[++pkt_itr] != 0 && pkt_itr < (size_t)p_src_buffer.size()) {
-		_server_ver_str += (char)p_src_buffer[pkt_itr];
+	size_t pkt_idx = 4;
+	const uint8_t *buf_ptr = p_src_buffer.ptr();
+	const size_t buf_size = p_src_buffer.size();
+
+	size_t str_len = 0;
+	while (pkt_idx + str_len < buf_size && buf_ptr[pkt_idx + str_len] != 0) {
+		str_len++;
 	}
 
-	_server_ver_str = _server_ver_str.strip_escapes();
+	_server_ver_str.parse_utf8((const char *)(buf_ptr + pkt_idx), str_len);
+	_server_ver_str = _server_ver_str.strip_edges();
 
 	if (_server_ver_str.begins_with("5.5.5-")) {
 		PackedStringArray split_ver_str = _server_ver_str.split("-");
@@ -574,34 +1232,32 @@ MariaDBConnector::ErrorCode MariaDBConnector::m_server_init_handshake_v10(const 
 		_srvr_minor_ver = split_ver_str_seg[1].to_int();
 	}
 
+	pkt_idx += str_len + 1;
 	// 4bytes - doesn't appear to be needed.
-	pkt_itr += 4;
+	pkt_idx += 4;
 
 	// salt part 1 - 8 bytes
-	PackedByteArray server_salt;
-	for (size_t j = 0; j < 8; j++)
-		server_salt.push_back(p_src_buffer[++pkt_itr]);
+	PackedByteArray server_salt = _get_pkt_bytes_adv_idx(p_src_buffer, pkt_idx, 8);
 
 	// reserved byte
-	pkt_itr++;
+	pkt_idx++;
 
-	_server_capabilities = 0;
 	// 2bytes -server capabilities part 1
-	_server_capabilities = (uint64_t)p_src_buffer[++pkt_itr];
-	_server_capabilities += ((uint64_t)p_src_buffer[++pkt_itr]) << 8;
+	_server_capabilities = (uint64_t)p_src_buffer[pkt_idx++];
+	_server_capabilities += ((uint64_t)p_src_buffer[pkt_idx++]) << 8;
 
 	// 1byte - server default collation code
-	++pkt_itr;
+	pkt_idx++;
 
 	// 2bytes - Status flags
 	// uint16_t status = 0;
-	// status = (uint16_t)p_src_buffer[++pkt_itr];
-	// status += ((uint16_t)p_src_buffer[++pkt_itr]) << 8;
-	pkt_itr += 2;
+	// status = (uint16_t)p_src_buffer[pkt_idx++;
+	// status += ((uint16_t)p_src_buffer[pkt_idx++]) << 8;
+	pkt_idx += 2;
 
 	// 2bytes - server capabilities part 2
-	_server_capabilities += ((uint64_t)p_src_buffer[++pkt_itr]) << 16;
-	_server_capabilities += ((uint64_t)p_src_buffer[++pkt_itr]) << 24;
+	_server_capabilities += ((uint64_t)p_src_buffer[pkt_idx++]) << 16;
+	_server_capabilities += ((uint64_t)p_src_buffer[pkt_idx++]) << 24;
 
 	if (!(_server_capabilities & (uint64_t)Capabilities::CLIENT_PROTOCOL_41)) {
 		ERR_FAIL_V_MSG(ErrorCode::ERR_AUTH_PROTOCOL_MISMATCH, "Incompatible authorization protocol!");
@@ -612,41 +1268,41 @@ MariaDBConnector::ErrorCode MariaDBConnector::m_server_init_handshake_v10(const 
 	}
 
 	// 1byte - salt length 0 for none
-	uint8_t server_salt_length = p_src_buffer[++pkt_itr];
+	uint8_t server_salt_length = p_src_buffer[pkt_idx++];
 
 	// 6bytes - filler
-	pkt_itr += 6;
+	pkt_idx += 6;
 
 	// 4bytes - filler or server capabilities part 3 (mariadb v10.2 or later)
 	// "MariaDBConnector extended capablities"
 	if (!(_server_capabilities & (uint64_t)Capabilities::CLIENT_MYSQL) && _srvr_major_ver >= 10 &&
 			_srvr_minor_ver >= 2) {
-		_server_capabilities += ((uint64_t)p_src_buffer[++pkt_itr]) << 32;
-		_server_capabilities += ((uint64_t)p_src_buffer[++pkt_itr]) << 40;
-		_server_capabilities += ((uint64_t)p_src_buffer[++pkt_itr]) << 48;
-		_server_capabilities += ((uint64_t)p_src_buffer[++pkt_itr]) << 56;
+		_server_capabilities += ((uint64_t)p_src_buffer[pkt_idx++]) << 32;
+		_server_capabilities += ((uint64_t)p_src_buffer[pkt_idx++]) << 40;
+		_server_capabilities += ((uint64_t)p_src_buffer[pkt_idx++]) << 48;
+		_server_capabilities += ((uint64_t)p_src_buffer[pkt_idx++]) << 56;
 	} else {
-		pkt_itr += 4;
+		pkt_idx += 4;
 	}
 
 	// 12bytes - salt part 2
 	for (size_t j = 0; j < (size_t)std::max(13, server_salt_length - 8); j++)
-		server_salt.push_back(p_src_buffer[++pkt_itr]);
+		server_salt.push_back(p_src_buffer[pkt_idx++]);
 
 	// 1byte - reserved
 	// nul string - auth plugin name, length = auth plugin string length
 	String tmp;
-	while (p_src_buffer[++pkt_itr] != 0 && pkt_itr < (size_t)p_src_buffer.size()) {
-		tmp += p_src_buffer[pkt_itr];
+	while (p_src_buffer[++pkt_idx] != 0 && pkt_idx < (size_t)p_src_buffer.size()) {
+		tmp += p_src_buffer[pkt_idx];
 	}
 
 	// determine which auth method the server can use
-	AuthType p_srvr_auth_type = m_get_server_auth_type(tmp);
+	AuthType p_srvr_auth_type = _get_server_auth_type(tmp);
 
-	return m_client_protocol_v41(p_srvr_auth_type, server_salt);
-} // server_init_handshake_v10
+	return _client_protocol_v41(p_srvr_auth_type, server_salt);
+}  // server_init_handshake_v10
 
-void MariaDBConnector::m_hash_password(String p_password) {
+void MariaDBConnector::_hash_password(String p_password) {
 	// Store password as a hash, only the hash is needed
 	if (_client_auth_type == AUTH_TYPE_MYSQL_NATIVE) {
 		_password_hashed = p_password.sha1_buffer();
@@ -662,11 +1318,16 @@ void MariaDBConnector::m_hash_password(String p_password) {
 	}
 }
 
-void MariaDBConnector::m_update_username(String p_username) { _username = p_username.to_utf8_buffer(); }
+void MariaDBConnector::_update_username(String p_username) { _username = p_username.to_utf8_buffer(); }
 
 // public
-MariaDBConnector::ErrorCode MariaDBConnector::connect_db(const String &p_host, const int p_port, const String &p_dbname,
-		const String &p_username, const String &p_password, const AuthType p_authtype, const bool p_is_prehashed) {
+MariaDBConnector::ErrorCode MariaDBConnector::connect_db(const String &p_host,
+		const int p_port,
+		const String &p_dbname,
+		const String &p_username,
+		const String &p_password,
+		const AuthType p_authtype,
+		const bool p_is_prehashed) {
 	if (p_host.is_valid_ip_address()) {
 		_ip = p_host;
 	} else {
@@ -704,8 +1365,9 @@ MariaDBConnector::ErrorCode MariaDBConnector::connect_db(const String &p_host, c
 	if (p_is_prehashed) {
 		if (p_authtype == AUTH_TYPE_MYSQL_NATIVE) {
 			if (!is_valid_hex(p_password, 40)) {
-				ERR_PRINT("Password not proper for MySQL Native prehash, must be 40 "
-						  "hex characters!");
+				ERR_PRINT(
+						"Password not proper for MySQL Native prehash, must be 40 "
+						"hex characters!");
 				return ErrorCode::ERR_PASSWORD_HASH_LENGTH;
 			}
 		} else if (p_authtype == AUTH_TYPE_ED25519) {
@@ -714,15 +1376,17 @@ MariaDBConnector::ErrorCode MariaDBConnector::connect_db(const String &p_host, c
 				return ErrorCode::ERR_PASSWORD_HASH_LENGTH;
 			}
 		}
-		_password_hashed = hex_str_to_bytes(p_password);
+
+		_password_hashed = p_password.hex_decode();
+
 	} else {
-		m_hash_password(p_password);
+		_hash_password(p_password);
 	}
 
-	m_update_username(p_username);
+	_update_username(p_username);
 
 	_client_auth_type = p_authtype;
-	return m_connect();
+	return _connect();
 }
 
 MariaDBConnector::ErrorCode MariaDBConnector::connect_db_ctx(const Ref<MariaDBConnectContext> &p_context) {
@@ -747,8 +1411,12 @@ MariaDBConnector::ErrorCode MariaDBConnector::connect_db_ctx(const Ref<MariaDBCo
 	}
 	// hex decode is dangerous, just pass the unmodified string if hex or plain
 
-	return connect_db(p_context->get_hostname(), p_context->get_port(), p_context->get_db_name(),
-			p_context->get_username(), password, static_cast<MariaDBConnector::AuthType>(p_context->get_auth_type()),
+	return connect_db(p_context->get_hostname(),
+			p_context->get_port(),
+			p_context->get_db_name(),
+			p_context->get_username(),
+			password,
+			static_cast<MariaDBConnector::AuthType>(p_context->get_auth_type()),
 			is_prehashed);
 }
 
@@ -756,9 +1424,10 @@ void MariaDBConnector::disconnect_db() {
 	// _tcp_polling = false;
 	if (is_connected_db()) {
 		// say goodbye too the server
-		//  uint8_t output[5] = {0x01, 0x00, 0x00, 0x00, 0x01};
-		String str = "0100000001";
-		_stream->put_data(str.hex_decode());
+		// uint8_t output[5] = {0x01, 0x00, 0x00, 0x00, 0x01};
+		// String str = "0100000001";
+		// _stream->put_data(str.hex_decode());
+		_stream->put_data(PackedByteArray({ 0x01, 0x00, 0x00, 0x00, 0x01 }));
 		_stream->disconnect_from_host();
 	}
 	_authenticated = false;
@@ -774,16 +1443,23 @@ Ref<MariaDBConnector> MariaDBConnector::connection_instance(const Ref<MariaDBCon
 	const bool is_prehashed = p_context->get_is_prehashed();
 
 	if (encoding == MariaDBConnectContext::ENCODE_BASE64) {
-		password = Marshalls::get_singleton()->base64_to_raw(password).hex_encode();
+		PackedByteArray raw = Marshalls::get_singleton()->base64_to_raw(password);
+		password = raw.hex_encode();
 	} else if (is_prehashed && encoding == MariaDBConnectContext::ENCODE_PLAIN) {
-		password = password.to_utf8_buffer().hex_encode();
+		PackedByteArray raw = password.to_utf8_buffer();
+		password = raw.hex_encode();
 	}
 
 	Ref<MariaDBConnector> conn;
 	conn.instantiate();
 
-	ErrorCode err = conn->connect_db(p_context->get_hostname(), p_context->get_port(), p_context->get_db_name(),
-			p_context->get_username(), password, static_cast<AuthType>(p_context->get_auth_type()), is_prehashed);
+	ErrorCode err = conn->connect_db(p_context->get_hostname(),
+			p_context->get_port(),
+			p_context->get_db_name(),
+			p_context->get_username(),
+			password,
+			static_cast<AuthType>(p_context->get_auth_type()),
+			is_prehashed);
 
 	ERR_FAIL_COND_V_EDMSG(
 			err != ErrorCode::OK, Ref<MariaDBConnector>(), vformat("Failed to connect: error code %d", int(err)));
@@ -797,8 +1473,8 @@ PackedByteArray MariaDBConnector::get_last_response() { return _last_response; }
 
 PackedByteArray MariaDBConnector::get_last_transmitted() { return _last_transmitted; }
 
-PackedByteArray MariaDBConnector::get_client_ed25519_signature(
-		const PackedByteArray &p_sha512_hashed_passwd, const PackedByteArray &p_svr_msg) {
+PackedByteArray MariaDBConnector::get_client_ed25519_signature(const PackedByteArray &p_sha512_hashed_passwd,
+		const PackedByteArray &p_svr_msg) {
 	// MySQL does not supprt this auth method
 	PackedByteArray rtn_val;
 	rtn_val.resize(64);
@@ -806,8 +1482,8 @@ PackedByteArray MariaDBConnector::get_client_ed25519_signature(
 	return rtn_val;
 }
 
-PackedByteArray MariaDBConnector::get_mysql_native_password_hash(
-		const PackedByteArray &p_sha1_hashed_passwd, const PackedByteArray &p_srvr_salt) {
+PackedByteArray MariaDBConnector::get_mysql_native_password_hash(const PackedByteArray &p_sha1_hashed_passwd,
+		const PackedByteArray &p_srvr_salt) {
 	// Per https://mariadb.com/kb/en/connection/#mysql_native_password-plugin
 	// Both MariaDB and MySQL support this authentication method
 
@@ -815,11 +1491,11 @@ PackedByteArray MariaDBConnector::get_mysql_native_password_hash(
 	PackedByteArray hash = _sha1(p_sha1_hashed_passwd);
 	// Combine server salt and hash
 	PackedByteArray combined_salt_pwd;
-	combined_salt_pwd.resize(40); // 20-byte salt + 20-byte hash
+	combined_salt_pwd.resize(40);  // 20-byte salt + 20-byte hash
 
 	for (int i = 0; i < 20; i++) {
-		combined_salt_pwd.set(i, p_srvr_salt[i]); // First 20 bytes: salt
-		combined_salt_pwd.set(i + 20, hash[i]); // Next 20 bytes: hashed password
+		combined_salt_pwd.set(i, p_srvr_salt[i]);  // First 20 bytes: salt
+		combined_salt_pwd.set(i + 20, hash[i]);	 // Next 20 bytes: hashed password
 	}
 
 	// Second SHA1 Hashing
@@ -859,385 +1535,161 @@ TypedArray<Dictionary> MariaDBConnector::select_query(const String &p_sql_stmt) 
 	return result;
 }
 
-Variant MariaDBConnector::_query(const String &p_sql_stmt, const bool p_is_command) {
+Dictionary MariaDBConnector::prepared_statement(const String &p_sql) {
 	_last_error = ErrorCode::OK;
-	if (!is_connected_db()) {
-		_last_error = ErrorCode::ERR_NOT_CONNECTED;
-		if (p_is_command) {
-			return 0;
-		} else {
-			return ERR_NOT_CONNECTED;
-		}
-	}
-	if (!_authenticated) {
-		_last_error = ErrorCode::ERR_NOT_CONNECTED;
-		if (p_is_command) {
-			return 0;
-		} else {
-			return (uint32_t)ErrorCode::ERR_AUTH_FAILED;
-		}
-	}
-	// _tcp_polling = true;
 
 	PackedByteArray send_buffer_vec;
+	send_buffer_vec.push_back(0x16);  // COM_STMT_PREPARE code (0x16)
+	send_buffer_vec.append_array(p_sql.to_utf8_buffer());
+	_add_packet_header(send_buffer_vec, 0);
+	_last_transmitted = send_buffer_vec;
+
+	_stream->put_data(send_buffer_vec);
+	PackedByteArray srvr_response = _read_buffer(_server_timout_msec);
+	if (srvr_response.is_empty()) {
+		_last_error = ErrorCode::ERR_NO_RESPONSE;
+		return Dictionary();
+	}
+
+	size_t pkt_idx = 0;
+	size_t pkt_len = bytes_to_num_adv_itr<size_t>(srvr_response.ptr(), 3, pkt_idx);
 	int bfr_size = 0;
+	_last_error = _rcv_bfr_chk(srvr_response, bfr_size, pkt_idx, pkt_len);
+	ERR_FAIL_COND_V_EDMSG(_last_error != OK,
+			Dictionary(),
+			vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_idx + pkt_len));
 
-	/* For interest of speed over memory I am working with the entire buffer
-	 * and keeping track of the iteration point, as most queries for
-	 * game dev should be small but speedy.
-	 */
+	uint8_t seq_num = srvr_response[pkt_idx++];
+	uint8_t status = srvr_response[pkt_idx++];
 
-	size_t pkt_itr = 0;
-	size_t pkt_len; // techinically section length everything arrives in one
-					// stream packet
-	size_t len_encode = 0;
-	bool done = false;
-	// From MariaDBConnector version 10.2 dep_eof should be true
+	if (status != 0) {
+		_last_error = ErrorCode::ERR_PREPARE_FAILED;
+		_handle_server_error(srvr_response, pkt_idx);
+		return Dictionary();
+	}
+
+	uint32_t statement_id = bytes_to_num_adv_itr<uint32_t>(srvr_response.ptr(), 4, pkt_idx);
+	uint16_t num_columns = bytes_to_num_adv_itr<uint16_t>(srvr_response.ptr(), 2, pkt_idx);
+	uint16_t num_params = bytes_to_num_adv_itr<uint16_t>(srvr_response.ptr(), 2, pkt_idx);
+
+	pkt_idx += 3;
+
+	Dictionary info;
+	info["statement_id"] = statement_id;
+	info["num_columns"] = num_columns;
+	info["num_params"] = num_params;
+
+	TypedArray<Dictionary> col_data;
+	for (size_t p = 0; p < num_params; ++p) {
+		// process parameter def packet
+		pkt_len = bytes_to_num_adv_itr<size_t>(srvr_response.ptr(), 3, pkt_idx);
+		_last_error = _rcv_bfr_chk(srvr_response, bfr_size, pkt_idx, pkt_len);
+		ERR_FAIL_COND_V_EDMSG(_last_error != OK,
+				Dictionary(),
+				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_idx + pkt_len));
+		seq_num = srvr_response[pkt_idx++];
+		pkt_idx += pkt_len;
+	}
+
+	col_data = _read_columns_data(srvr_response, pkt_idx, num_columns);
+
+	_prep_column_data[statement_id] = col_data;
+
+	return info;
+}
+
+TypedArray<Dictionary> MariaDBConnector::exec_prepped_select(uint32_t p_stmt_id, const Array &p_params) {
+	_last_error = _prepared_params_send(p_stmt_id, p_params);
+	if (_last_error != OK) {
+		return TypedArray<Dictionary>();
+	}
+
+	PackedByteArray srvr_response = _read_buffer(_server_timout_msec);
+	if (srvr_response.is_empty()) {
+		_last_error = ErrorCode::ERR_NO_RESPONSE;
+		return TypedArray<Dictionary>();
+	}
+
+	print_line(srvr_response.hex_encode());
+	size_t pkt_idx = 0;
+	size_t pkt_len = bytes_to_num_adv_itr<size_t>(srvr_response.ptr(), 3, pkt_idx);
+
+	print_line("p_pkt_idx:", pkt_idx, " pkt_len:", pkt_len);
+
+	size_t seq_num = srvr_response[pkt_idx++];
+
+	pkt_idx += 2;  // Skip over column count and status byte
+
+	TypedArray<Dictionary> col_data = _prep_column_data.get(p_stmt_id, TypedArray<Dictionary>());
+	if (col_data.size() == 0) {
+		uint8_t marker = srvr_response[pkt_idx++];
+		if (marker == 0xFF) {
+			// Proper error marker
+			_last_error = ERR_UNAVAILABLE;
+			ERR_PRINT("exec_prepped_select failed: ERR packet received");
+		} else {
+			_last_error = ERR_UNAVAILABLE;
+			ERR_PRINT(vformat("exec_prepped_select unexpected marker: 0x%02X", marker));
+		}
+		return TypedArray<Dictionary>();
+	}
+
 	bool dep_eof = (_client_capabilities & (uint64_t)Capabilities::CLIENT_DEPRECATE_EOF);
 
-	send_buffer_vec.push_back(0x03);
-	_last_query_converted = p_sql_stmt.to_utf8_buffer();
+	Variant rows = _parse_prepared_exec(srvr_response, pkt_idx, col_data, dep_eof);
+	if (rows.get_type() != Variant::ARRAY) {
+		_last_error = ERR_UNAVAILABLE;
+		return TypedArray<Dictionary>();
+	}
 
-	send_buffer_vec.append_array(_last_query_converted);
-	m_add_packet_header(send_buffer_vec, 0);
+	return TypedArray<Dictionary>(rows);
+}
 
-	_last_transmitted = send_buffer_vec;
-	// _tcp_mutex.lock();
-	_stream->put_data(send_buffer_vec);
-	// _tcp_mutex.unlock();
-
-	PackedByteArray srvr_response = m_recv_data(_server_timout_msec);
-	// m_append_thread_data(srvr_response);
-
-	if (srvr_response.size() == 0) {
+Dictionary MariaDBConnector::exec_prepped_command(uint32_t p_stmt_id, const Array &p_params) {
+	_last_error = _prepared_params_send(p_stmt_id, p_params);
+	if (_last_error != OK) return Dictionary();
+	PackedByteArray rx_buf = _read_buffer(_server_timout_msec);
+	if (rx_buf.is_empty()) {
 		_last_error = ErrorCode::ERR_NO_RESPONSE;
-		if (p_is_command) {
-			return 0;
-		} else {
-			return (uint32_t)ErrorCode::ERR_NO_RESPONSE;
-		}
+		return Dictionary();
+	}
+	size_t pkt_idx = 0;
+	print_line("pkt_idx:", pkt_idx, " starting bytes:", rx_buf.slice(pkt_idx, rx_buf.size()).hex_encode());
+
+	size_t pkt_len = bytes_to_num_adv_itr<size_t>(rx_buf.ptr(), 3, pkt_idx);
+	uint8_t status = rx_buf.decode_u8(pkt_idx++);
+	if (status != 0) {
+		_handle_server_error(rx_buf, pkt_idx);
+		_last_error = ErrorCode::ERR_EXECUTE_FAILED;
+		return Dictionary();
 	}
 
-	// Not doing anything with this value, here, because the buffer may have been
-	// full and more data is needed. So I am using the process time to allow more
-	// to get into the buffer, instead of constantly polling the buffer
-	//	before any work is done, there are more and smaller internal packets
-	// with buffer size checks for every 	sub-packet.
-	pkt_len = m_get_pkt_len_at(srvr_response, pkt_itr);
+	uint64_t affected_rows = _decode_lenenc_adv_itr(rx_buf, pkt_idx);
+	uint64_t last_insert_id = _decode_lenenc_adv_itr(rx_buf, pkt_idx);
+	uint16_t status_flags = bytes_to_num_adv_itr<uint16_t>(rx_buf.ptr(), 2, pkt_idx);
+	uint16_t warnings = bytes_to_num_adv_itr<uint16_t>(rx_buf.ptr(), 2, pkt_idx);
 
-	// uint8_t seq_num = srvr_response[++pkt_itr];
-	++pkt_itr;
-
-	/* https://mariadb.com/kb/en/result-set-packets/
-	 * The pkt_itr should be at 3, we are on the 4th byte and wlll iterate before
-	 * use Resultset metadata All segment packets start with packet length(3
-	 * bytes) and sequence number This is a small packet with packet length of 1
-	 * to 9 of 4 to 19 bytes to determine how many columns of data are being sent.
-	 */
-
-	uint64_t col_cnt = 0;
-	uint8_t test = srvr_response[++pkt_itr];
-	// print_line("Column Count Test Byte:" + String::num_int64(test, 16));
-	// https://mariadb.com/kb/en/protocol-data-types/#length-encoded-integers
-	if (test == 0xFF) {
-		m_handle_server_error(srvr_response, pkt_itr);
-		_last_error = ErrorCode::ERR_PACKET;
-
-		if (p_is_command) {
-			return 0;
-		} else {
-			return (uint32_t)_last_error;
-		}
-	} else if (test == 0xFE) {
-		col_cnt = bytes_to_num_itr_pos<uint64_t>(srvr_response.ptr(), 8, pkt_itr);
-	} else if (test == 0xFD) {
-		col_cnt = bytes_to_num_itr_pos<uint64_t>(srvr_response.ptr(), 3, pkt_itr);
-	} else if (test == 0xFC) {
-		col_cnt = bytes_to_num_itr_pos<uint64_t>(srvr_response.ptr(), 2, pkt_itr);
-	} else if (test == 0xFB) {
-		// null value
-		// TODO needs investigation, not sure why this would happen
-	} else if (test == 0x00) {
-		if (p_is_command) {
-			Dictionary result;
-
-			// Affected rows
-			uint64_t affected_rows = 0;
-			uint8_t marker = srvr_response[++pkt_itr];
-
-			if (marker < 0xFB) {
-				affected_rows = marker;
-			} else if (marker == 0xFC) {
-				affected_rows = bytes_to_num_itr_pos<uint64_t>(srvr_response.ptr(), 2, pkt_itr);
-			} else if (marker == 0xFD) {
-				affected_rows = bytes_to_num_itr_pos<uint64_t>(srvr_response.ptr(), 3, pkt_itr);
-			} else if (marker == 0xFE) {
-				affected_rows = bytes_to_num_itr_pos<uint64_t>(srvr_response.ptr(), 8, pkt_itr);
-			}
-
-			// Last insert ID
-			uint64_t last_insert_id = 0;
-			marker = srvr_response[++pkt_itr];
-
-			if (marker < 0xFB) {
-				last_insert_id = marker;
-			} else if (marker == 0xFC) {
-				last_insert_id = bytes_to_num_itr_pos<uint64_t>(srvr_response.ptr(), 2, pkt_itr);
-			} else if (marker == 0xFD) {
-				last_insert_id = bytes_to_num_itr_pos<uint64_t>(srvr_response.ptr(), 3, pkt_itr);
-			} else if (marker == 0xFE) {
-				last_insert_id = bytes_to_num_itr_pos<uint64_t>(srvr_response.ptr(), 8, pkt_itr);
-			}
-
-			// Status flags and warnings
-			uint16_t status_flags = srvr_response[++pkt_itr] | (srvr_response[++pkt_itr] << 8);
-			uint16_t warnings = srvr_response[++pkt_itr] | (srvr_response[++pkt_itr] << 8);
-
-			// Info message
-			String info_message = "";
-			if (pkt_itr + 1 < srvr_response.size()) {
-				info_message =
-						String::utf8((const char *)&srvr_response[pkt_itr + 1], srvr_response.size() - (pkt_itr + 1));
-			}
-
-			// Build dictionary
-			result["affected_rows"] = affected_rows;
-			result["last_insert_id"] = last_insert_id;
-			result["status_flags"] = status_flags;
-			result["warnings"] = warnings;
-			result["info"] = info_message;
-
-			return result;
-		}
-		return 0;
-	} else {
-		col_cnt = srvr_response[pkt_itr];
+	String info;
+	if (pkt_idx < rx_buf.size()) {
+		info = String::utf8((const char *)&rx_buf[pkt_idx], rx_buf.size() - pkt_idx);
 	}
 
-	if (_client_capabilities & (uint64_t)Capabilities::MARIADB_CLIENT_CACHE_METADATA) {
-		++pkt_itr;
-	}
+	Dictionary result;
+	result["affected_rows"] = affected_rows;
+	result["last_insert_id"] = last_insert_id;
+	result["status_flags"] = status_flags;
+	result["warnings"] = warnings;
+	result["info"] = info;
+	return result;
+}
 
-	Array col_data;
-	//	for each column (i.e column_count times)
-	for (size_t itr = 0; itr < col_cnt; ++itr) {
-		_last_error = _rcv_bfr_chk(srvr_response, bfr_size, pkt_itr, 24);
-		ERR_FAIL_COND_V_EDMSG(_last_error != OK, _last_error,
-				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_itr + 24));
-
-		pkt_len = m_get_pkt_len_at(srvr_response, ++pkt_itr);
-		if (_rcv_bfr_chk(srvr_response, bfr_size, pkt_itr, pkt_len) != OK) {
-			srvr_response.append_array(m_recv_data(_server_timout_msec, pkt_len));
-		}
-
-		// seq_num = srvr_response[++pkt_itr];
-		++pkt_itr;
-
-		//	Column Definition packet
-		// https://mariadb.com/kb/en/result-set-packets/#column-definition-packet
-
-		//	string<lenenc> catalog (always 'def')
-		len_encode = srvr_response[++pkt_itr];
-		vbytes_to_utf8_itr_at(srvr_response, pkt_itr, len_encode);
-
-		//	string<lenenc> schema (database name)
-		len_encode = srvr_response[++pkt_itr];
-		_last_error = _rcv_bfr_chk(srvr_response, bfr_size, pkt_itr, len_encode);
-		ERR_FAIL_COND_V_EDMSG(_last_error != OK, _last_error,
-				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_itr + len_encode));
-		vbytes_to_utf8_itr_at(srvr_response, pkt_itr, len_encode);
-
-		//	string<lenenc> table alias
-		len_encode = srvr_response[++pkt_itr];
-
-		_last_error = _rcv_bfr_chk(srvr_response, bfr_size, pkt_itr, len_encode);
-		ERR_FAIL_COND_V_EDMSG(_last_error != OK, _last_error,
-				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_itr + len_encode));
-
-		vbytes_to_utf8_itr_at(srvr_response, pkt_itr, len_encode);
-
-		//	string<lenenc> table
-		len_encode = srvr_response[++pkt_itr];
-
-		_last_error = _rcv_bfr_chk(srvr_response, bfr_size, pkt_itr, len_encode);
-		ERR_FAIL_COND_V_EDMSG(_last_error != OK, _last_error,
-				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_itr + len_encode));
-
-		vbytes_to_utf8_itr_at(srvr_response, pkt_itr, len_encode);
-
-		//	string<lenenc> column alias
-		len_encode = srvr_response[++pkt_itr];
-
-		_last_error = _rcv_bfr_chk(srvr_response, bfr_size, pkt_itr, len_encode);
-		ERR_FAIL_COND_V_EDMSG(_last_error != OK, _last_error,
-				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_itr + len_encode));
-
-		String column_name = vbytes_to_utf8_itr_at(srvr_response, pkt_itr, len_encode);
-
-		//	string<lenenc> column
-		len_encode = srvr_response[++pkt_itr];
-
-		_last_error = _rcv_bfr_chk(srvr_response, bfr_size, pkt_itr, len_encode);
-		ERR_FAIL_COND_V_EDMSG(_last_error != OK, _last_error,
-				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_itr + len_encode));
-
-		vbytes_to_utf8_itr_at(srvr_response, pkt_itr, len_encode);
-
-		// TODO(sigrudds1) Handle "MariaDBConnector extended capablities" (several
-		// locations)
-		//		if extended type supported (see
-		// MARIADB_CLIENT_EXTENDED_TYPE_INFO ) 			int<lenenc>
-		// length extended info 			loop
-		// int<1> data type: 0x00:type, 0x01: format string<lenenc> value
-
-		//	int<lenenc> length of fixed fields (=0xC)
-		uint8_t remaining = srvr_response[++pkt_itr];
-
-		_last_error = _rcv_bfr_chk(srvr_response, bfr_size, pkt_itr, remaining);
-		ERR_FAIL_COND_V_EDMSG(_last_error != OK, _last_error,
-				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_itr + remaining));
-
-		// ++pkt_itr; //remaining bytes in packet section
-
-		//	int<2> character set number
-		uint16_t char_set = bytes_to_num_itr_pos<uint16_t>(srvr_response.ptr(), 2, pkt_itr);
-
-		// int<4> max. column size the number in parenthesis eg int(10),
-		// varchar(255) uint32_t col_size =
-		// bytes_to_num_itr<uint32_t>(srvr_response.data(), 4, pkt_itr);
-		pkt_itr += 4;
-
-		//	int<1> Field types
-		// https://mariadb.com/kb/en/result-set-packets/#field-types
-		uint8_t field_type = srvr_response[++pkt_itr];
-
-		//	int<2> Field detail flag
-		// https://mariadb.com/kb/en/result-set-packets/#field-details-flag
-		pkt_itr += 2;
-
-		//	int<1> decimals
-		pkt_itr += 1;
-		//	int<2> - unused -
-		pkt_itr += 2;
-		Dictionary column_data;
-		column_data["name"] = column_name;
-		column_data["char_set"] = char_set;
-		column_data["field_type"] = field_type;
-
-		col_data.push_back(column_data);
-	}
-
-	//	if not (CLIENT_DEPRECATE_EOF capability set) get EOF_Packet
-	if (!dep_eof) {
-		pkt_itr += 5; // bypass for now
-	}
-
-	// String dict_string = Variant(col_data).stringify();
-	// print_line("Dictionary: " + dict_string);
-
-	Array arr;
-
-	// process values
-	while (!done && pkt_itr < (size_t)srvr_response.size()) {
-		// Last packet is always 11 bytes, pkt len code = 3 bytes, seq = 1 byte, pkt
-		// data = 7 bytes
-		_last_error = _rcv_bfr_chk(srvr_response, bfr_size, pkt_itr, 11);
-		ERR_FAIL_COND_V_EDMSG(_last_error != OK, _last_error,
-				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_itr + 11));
-
-		pkt_len = m_get_pkt_len_at(srvr_response, ++pkt_itr);
-
-		_last_error = _rcv_bfr_chk(srvr_response, bfr_size, pkt_itr, pkt_len);
-		ERR_FAIL_COND_V_EDMSG(_last_error != OK, _last_error,
-				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_itr + pkt_len));
-
-		// seq_num = srvr_response[++pkt_itr];
-		++pkt_itr;
-		test = srvr_response[pkt_itr + 1];
-
-		if (test == 0xFE && dep_eof && pkt_len < 0xFFFFFF) {
-			done = true;
-			break;
-		}
-		Dictionary dict;
-		// https://mariadb.com/kb/en/protocol-data-types/#length-encoded-strings
-		for (size_t itr = 0; itr < col_cnt; ++itr) {
-			_last_error = _rcv_bfr_chk(srvr_response, bfr_size, pkt_itr, 2);
-			ERR_FAIL_COND_V_EDMSG(_last_error != OK, _last_error,
-					vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_itr + 2));
-
-			test = srvr_response[++pkt_itr];
-			if (test == 0xFF) {
-				// ERR_Packet
-				//  Don't think these two if's are needed for column data
-				//  } else if ((test == 0x00 && !dep_eof /* && pkt_len < 0xFFFFFF */) ||
-				//  		(test == 0xFE && pkt_len < 0xFFFFFF && dep_eof)) {
-				//  	//OK_Packet
-				//  	done = true;
-				//  	break;
-				//  } else if (test == 0xFE && pkt_len < 0xFFFFFF && !dep_eof) {
-				//  	//EOF_Packet
-				//  	done = true;
-				//  	break;
-			} else {
-				if (test == 0xFE) {
-					_last_error = _rcv_bfr_chk(srvr_response, bfr_size, pkt_itr, 8);
-					ERR_FAIL_COND_V_EDMSG(_last_error != OK, _last_error,
-							vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_itr + 8));
-					len_encode = bytes_to_num_itr_pos<uint64_t>(srvr_response.ptr(), 8, pkt_itr);
-				} else if (test == 0xFD) {
-					_last_error = _rcv_bfr_chk(srvr_response, bfr_size, pkt_itr, 3);
-					ERR_FAIL_COND_V_EDMSG(_last_error != OK, _last_error,
-							vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_itr + 3));
-					len_encode = bytes_to_num_itr_pos<uint64_t>(srvr_response.ptr(), 3, pkt_itr);
-				} else if (test == 0xFC) {
-					len_encode = bytes_to_num_itr_pos<uint64_t>(srvr_response.ptr(), 2, pkt_itr);
-				} else if (test == 0xFB) {
-					// null value need to skip
-					len_encode = 0;
-				} else {
-					len_encode = srvr_response[pkt_itr];
-				}
-
-				_last_error = _rcv_bfr_chk(srvr_response, bfr_size, pkt_itr, len_encode);
-				ERR_FAIL_COND_V_EDMSG(_last_error != OK, _last_error,
-						vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_itr + len_encode));
-
-				// print_line("len_encode:" + String::num_int64(len_encode));
-				bool valid = false;
-
-				// NOTE when accessing Dictionaries in C++ you must assign the value to
-				// the expected type or you get undefined and erratic  behavior
-				String field_name = String(col_data[itr].get("name", &valid));
-				ERR_FAIL_COND_V_EDMSG(!valid, Variant(), vformat("ERROR: 'name' key is missing at index %d", itr));
-
-				if (len_encode > 0) {
-					PackedByteArray data = m_get_pkt_bytes(srvr_response, ++pkt_itr, len_encode);
-					// ✅ Convert Variant to int64_t before passing it to
-					// m_get_type_data()
-					valid = false;
-					int64_t field_type = int64_t(col_data[itr].get("field_type", &valid));
-
-					if (!valid) {
-						// print_line("ERROR: 'field_type' key is missing at index " +
-						// String::num_int64(itr));
-						dict[field_name] = Variant(); // Store empty if missing
-					} else {
-						dict[field_name] = m_get_type_data(field_type, data);
-					}
-				} else {
-					dict[field_name] = Variant();
-				}
-			}
-		}
-
-		if (!done)
-			arr.push_back(dict);
-	}
-	// _tcp_polling = false;
-	_last_response = PackedByteArray(srvr_response);
-
-	return Variant(arr);
+void MariaDBConnector::close_statement(uint32_t stmt_id) {
+	PackedByteArray send_buffer_vec;
+	send_buffer_vec.push_back(0x19);  // COM_STMT_CLOSE code (0x17)
+	send_buffer_vec.encode_u32(send_buffer_vec.size(), stmt_id);
+	send_buffer_vec.resize(send_buffer_vec.size() + 4);
+	_add_packet_header(send_buffer_vec, 0);
+	_stream->put_data(send_buffer_vec);
 }
 
 void MariaDBConnector::set_dbl_to_string(bool p_is_to_str) { _dbl_to_string = p_is_to_str; }

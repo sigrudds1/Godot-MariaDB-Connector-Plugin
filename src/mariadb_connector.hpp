@@ -1,8 +1,8 @@
 /*************************************************************************/
-/*  mariadb.cpp                                                          */
+/*  mariadb.hpp                                                          */
 /*************************************************************************/
 /*                     This file is part of the                          */
-/*                     MariaDB connection module                         */
+/*                      MariaDBConnector addon                           */
 /*                    for use in the Godot Engine                        */
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
@@ -31,14 +31,14 @@
 
 #pragma once
 
-#include <godot_cpp/core/binder_common.hpp>
-#include <godot_cpp/core/class_db.hpp>
-
 #include "mariadb_connect_context.hpp"
 #include "mariadb_connector_common.hpp"
+
 #include <godot_cpp/classes/ip.hpp>
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/classes/stream_peer_tcp.hpp>
+#include <godot_cpp/core/binder_common.hpp>
+#include <godot_cpp/core/class_db.hpp>
 
 // #include <thread>
 // #include <godot_cpp/classes/thread.hpp>
@@ -46,7 +46,7 @@
 
 using namespace godot;
 
-constexpr uint8_t kCharacterCollationId = 33; //utf8_general_ci
+constexpr uint8_t kCharacterCollationId = 33;  //utf8_general_ci
 constexpr char *kCharacterCollationName = (char *)"utf8_general_ci";
 
 class MariaDBConnector : public RefCounted {
@@ -89,48 +89,87 @@ public:
 		ERR_SEND_FAILED,
 		ERR_INVALID_PORT,
 		ERR_UNKNOWN,
-		ERR_PACKET
+		ERR_PACKET,
+		ERR_INVALID_PARAMETER,
+		ERR_PREPARE_FAILED,
+		ERR_EXECUTE_FAILED
+	};
+
+	enum FieldType : uint8_t {
+		FIELD_TYPE_DECIMAL = 1,	 // MYSQL_TYPE_DECIMAL (0)
+		FIELD_TYPE_TINY,  // MYSQL_TYPE_TINY (1) - signed 8-bit
+		FIELD_TYPE_UTINY,  // MYSQL_TYPE_TINY (1 + unsigned flag)
+		FIELD_TYPE_SHORT,  // MYSQL_TYPE_SHORT (2) - signed 16-bit
+		FIELD_TYPE_USHORT,	// MYSQL_TYPE_SHORT + unsigned
+		FIELD_TYPE_LONG,  // MYSQL_TYPE_LONG (3) - signed 32-bit
+		FIELD_TYPE_ULONG,  // MYSQL_TYPE_LONG + unsigned
+		FIELD_TYPE_FLOAT,  // MYSQL_TYPE_FLOAT (4)
+		FIELD_TYPE_DOUBLE,	// MYSQL_TYPE_DOUBLE (5)
+		FIELD_TYPE_NULL,  // MYSQL_TYPE_NULL (6)
+		FIELD_TYPE_TIMESTAMP,  // MYSQL_TYPE_TIMESTAMP (7)
+		FIELD_TYPE_LONGLONG,  // MYSQL_TYPE_LONGLONG (8) - signed 64-bit
+		FIELD_TYPE_ULONGLONG,  // MYSQL_TYPE_LONGLONG + unsigned
+		FIELD_TYPE_INT24,  // MYSQL_TYPE_INT24 (9) - signed 24-bit (rare)
+		FIELD_TYPE_UINT24,	// MYSQL_TYPE_INT24 + unsigned
+		FIELD_TYPE_DATE,  // MYSQL_TYPE_DATE (10)
+		FIELD_TYPE_TIME,  // MYSQL_TYPE_TIME (11)
+		FIELD_TYPE_DATETIME,  // MYSQL_TYPE_DATETIME (12)
+		FIELD_TYPE_YEAR,  // MYSQL_TYPE_YEAR (13)
+		FIELD_TYPE_NEWDATE,	 // MYSQL_TYPE_NEWDATE (14) - deprecated alias
+		FIELD_TYPE_VARCHAR,	 // MYSQL_TYPE_VARCHAR (15)
+		FIELD_TYPE_BIT,	 // MYSQL_TYPE_BIT (16)
+		FIELD_TYPE_JSON,  // MYSQL_TYPE_JSON (245)
+		FIELD_TYPE_NEWDECIMAL,	// MYSQL_TYPE_NEWDECIMAL (246)
+		FIELD_TYPE_ENUM,  // MYSQL_TYPE_ENUM (247)
+		FIELD_TYPE_SET,	 // MYSQL_TYPE_SET (248)
+		FIELD_TYPE_TINY_BLOB,  // MYSQL_TYPE_TINY_BLOB (249)
+		FIELD_TYPE_MEDIUM_BLOB,	 // MYSQL_TYPE_MEDIUM_BLOB (250)
+		FIELD_TYPE_LONG_BLOB,  // MYSQL_TYPE_LONG_BLOB (251)
+		FIELD_TYPE_BLOB,  // MYSQL_TYPE_BLOB (252)
+		FIELD_TYPE_VAR_STRING,	// MYSQL_TYPE_VAR_STRING (253)
+		FIELD_TYPE_STRING,	// MYSQL_TYPE_STRING (254)
+		FIELD_TYPE_GEOMETRY	 // MYSQL_TYPE_GEOMETRY (255)
 	};
 
 private:
 	//https://mariadb.com/kb/en/connection/#capabilities
 	enum class Capabilities : uint64_t {
-		LONG_PASSWORD = (1ULL << 0), //MySQL
-		CLIENT_MYSQL = (1ULL << 0), //MariaDB - lets server know this is a mysql client
+		LONG_PASSWORD = (1ULL << 0),  //MySQL
+		CLIENT_MYSQL = (1ULL << 0),	 //MariaDB - lets server know this is a mysql client
 		FOUND_ROWS = (1ULL << 1),
-		LONG_FLAG = (1ULL << 2), //Not listed in MariaDB
+		LONG_FLAG = (1ULL << 2),  //Not listed in MariaDB
 		CONNECT_WITH_DB = (1ULL << 3),
-		NO_SCHEMA = (1ULL << 4), //Not listed in MariaDB
-		NO_DB_TABLE_COLUMN = (1ULL << 4), //Alternate name, Not listed in MariaDB
+		NO_SCHEMA = (1ULL << 4),  //Not listed in MariaDB
+		NO_DB_TABLE_COLUMN = (1ULL << 4),  //Alternate name, Not listed in MariaDB
 		COMPRESS = (1ULL << 5),
-		ODBC = (1ULL << 6), //Not listed in MariaDB
+		ODBC = (1ULL << 6),	 //Not listed in MariaDB
 		LOCAL_FILES = (1ULL << 7),
 		IGNORE_SPACE = (1ULL << 8),
 		CLIENT_PROTOCOL_41 = (1ULL << 9),
 		CLIENT_INTERACTIVE = (1ULL << 10),
 		SSL = (1ULL << 11),
-		IGNORE_SIGPIPE = (1ULL << 12), //MySQL
-		TRANSACTIONS_MARIA = (1ULL << 12), //MariaDB
-		TRANSACTIONS_MYSQL = (1ULL << 13), //MySQL
-		SECURE_CONNECTION = (1ULL << 13), //MariaDB
-		RESERVED = (1ULL << 14), //Not listed in MariaDB
-		RESERVED2 = (1ULL << 15), //Not in Maria Docs but needed
+		IGNORE_SIGPIPE = (1ULL << 12),	//MySQL
+		TRANSACTIONS_MARIA = (1ULL << 12),	//MariaDB
+		TRANSACTIONS_MYSQL = (1ULL << 13),	//MySQL
+		SECURE_CONNECTION = (1ULL << 13),  //MariaDB
+		RESERVED = (1ULL << 14),  //Not listed in MariaDB
+		RESERVED2 = (1ULL << 15),  //Not in Maria Docs but needed
 		MULTI_STATEMENTS = (1ULL << 16),
 		MULTI_RESULTS = (1ULL << 17),
 		PS_MULTI_RESULTS = (1ULL << 18),
 		PLUGIN_AUTH = (1ULL << 19),
 		CLIENT_SEND_CONNECT_ATTRS = (1ULL << 20),
-		PLUGIN_AUTH_LENENC_CLIENT_DATA = (1ULL << 21), //TODO Add compatibility
-		CAN_HANDLE_EXPIRED_PASSWORDS = (1ULL << 22), //Not listed in MariaDB
+		PLUGIN_AUTH_LENENC_CLIENT_DATA = (1ULL << 21),	//TODO Add compatibility
+		CAN_HANDLE_EXPIRED_PASSWORDS = (1ULL << 22),  //Not listed in MariaDB
 		SESSION_TRACK = (1ULL << 23),
 		CLIENT_DEPRECATE_EOF = (1ULL << 24),
 		OPTIONAL_RESULTSET_METADATA = (1ULL << 25),
 		CLIENT_ZSTD_COMPRESSION_ALGORITHM = (1ULL << 26),
-		CLIENT_QUERY_ATTRIBUTES = (1ULL << 27), //Not listed in MariaDB
+		CLIENT_QUERY_ATTRIBUTES = (1ULL << 27),	 //Not listed in MariaDB
 		//NOT_USED = (1ULL << 28),
-		CLIENT_CAPABILITY_EXTENSION = (1ULL << 29), //MariaDB reserved for future use.
-		SSL_VERIFY_SERVER_CERT = (1ULL << 30), //Not listed in MariaDB
-		REMEMBER_OPTIONS = (1ULL << 31), //Not listed in MariaDB
+		CLIENT_CAPABILITY_EXTENSION = (1ULL << 29),	 //MariaDB reserved for future use.
+		SSL_VERIFY_SERVER_CERT = (1ULL << 30),	//Not listed in MariaDB
+		REMEMBER_OPTIONS = (1ULL << 31),  //Not listed in MariaDB
 		MARIADB_CLIENT_PROGRESS = (1ULL << 32),
 		MARIADB_CLIENT_COM_MULTI = (1ULL << 33),
 		MARIADB_CLIENT_STMT_BULK_OPERATIONS = (1ULL << 34),
@@ -177,32 +216,45 @@ private:
 	 * \param stream	std::vector<uint8_t> the stream to be modified.
 	 * \param sequance	int
 	 */
-	void m_add_packet_header(PackedByteArray &p_pkt, uint8_t p_pkt_seq);
+	void _add_packet_header(PackedByteArray &p_pkt, uint8_t p_pkt_seq);
 
 	// void m_append_thread_data(PackedByteArray &p_data, const uint64_t p_timeout = 1000);
 	// void m_tcp_thread_func();
 
 	ErrorCode _rcv_bfr_chk(PackedByteArray &bfr, int &bfr_size, const size_t cur_pos, const size_t bytes_needed);
 
-	ErrorCode m_client_protocol_v41(const AuthType p_srvr_auth_type, const PackedByteArray p_srvr_salt);
-	ErrorCode m_connect();
+	ErrorCode _client_protocol_v41(const AuthType p_srvr_auth_type, const PackedByteArray p_srvr_salt);
+	ErrorCode _connect();
 
-	String m_find_vbytes_str_at(PackedByteArray p_buf, size_t &p_start_pos);
-	String m_find_vbytes_str(PackedByteArray p_buf);
+	String _parse_null_utf8_at_adv_idx(PackedByteArray p_buf, size_t &p_start_pos);
+	String _parse_null_utf8(PackedByteArray p_buf);
 
-	PackedByteArray m_get_pkt_bytes(const PackedByteArray &src_buf, size_t &start_pos, const size_t byte_cnt);
-	size_t m_get_pkt_len_at(const PackedByteArray p_src_buf, size_t &p_start_pos);
-	AuthType m_get_server_auth_type(String p_srvr_auth_name);
-	Variant m_get_type_data(const int p_db_field_type, const PackedByteArray p_data);
+	PackedByteArray _get_pkt_bytes_adv_idx(const PackedByteArray &src_buf, size_t &start_pos, const size_t byte_cnt);
 
-	PackedByteArray m_recv_data(uint32_t timeout, uint32_t expected_bytes = 0);
-	//TODO(sigrudds1) Add error log file using the username in the filename
-	void m_handle_server_error(const PackedByteArray p_src_buffer, size_t &p_last_pos);
-	ErrorCode m_server_init_handshake_v10(const PackedByteArray &p_src_buffer);
-	void m_hash_password(String p_password);
-	void m_update_username(String P_username);
+	AuthType _get_server_auth_type(String p_srvr_auth_name);
+	Variant _get_type_data(const int p_db_field_type, const PackedByteArray p_data);
+	TypedArray<Dictionary> _parse_prepared_exec(PackedByteArray &buf,
+			size_t &pkt_itr,
+			const TypedArray<Dictionary> &col_defs,
+			bool dep_eof);
+	TypedArray<Dictionary> _parse_string_rows(PackedByteArray &buf,
+			size_t &pkt_itr,
+			const TypedArray<Dictionary> &col_defs,
+			const bool dep_eof);
+
+	ErrorCode _prepared_params_send(const uint32_t p_stmt_id, const Array &p_params);
 
 	Variant _query(const String &sql_stmt, const bool is_command = false);
+
+	PackedByteArray _read_buffer(uint32_t timeout, uint32_t expected_bytes = 0);
+	TypedArray<Dictionary> _read_columns_data(PackedByteArray &srvr_response, size_t &pkt_itr, const uint16_t col_cnt);
+	//TODO(sigrudds1) Add error log file using the username in the filename
+	void _handle_server_error(const PackedByteArray p_src_buffer, size_t &p_last_pos);
+	void _hash_password(String p_password);
+
+	ErrorCode _server_init_handshake_v10(const PackedByteArray &p_src_buffer);
+	Variant _com_query_response(const bool p_is_command);
+	void _update_username(String P_username);
 
 	static inline bool is_valid_hex(const String &p_string, int expected_length = 0) {
 		if (expected_length > 0 && p_string.length() != expected_length) {
@@ -221,6 +273,42 @@ private:
 
 protected:
 	static void _bind_methods();
+	Dictionary _prep_column_data;
+	enum MySqlFieldType : uint8_t {
+		MYSQL_TYPE_DECIMAL = 0,
+		MYSQL_TYPE_TINY = 1,
+		MYSQL_TYPE_SHORT = 2,
+		MYSQL_TYPE_LONG = 3,
+		MYSQL_TYPE_FLOAT = 4,
+		MYSQL_TYPE_DOUBLE = 5,
+		MYSQL_TYPE_NULL = 6,
+		MYSQL_TYPE_TIMESTAMP = 7,
+		MYSQL_TYPE_LONGLONG = 8,
+		MYSQL_TYPE_INT24 = 9,
+		MYSQL_TYPE_DATE = 10,
+		MYSQL_TYPE_TIME = 11,
+		MYSQL_TYPE_DATETIME = 12,
+		MYSQL_TYPE_YEAR = 13,
+		MYSQL_TYPE_NEWDATE = 14,
+		MYSQL_TYPE_VARCHAR = 15,
+		MYSQL_TYPE_BIT = 16,
+		MYSQL_TYPE_JSON = 245,
+		MYSQL_TYPE_NEWDECIMAL = 246,
+		MYSQL_TYPE_ENUM = 247,
+		MYSQL_TYPE_SET = 248,
+		MYSQL_TYPE_TINY_BLOB = 249,
+		MYSQL_TYPE_MEDIUM_BLOB = 250,
+		MYSQL_TYPE_LONG_BLOB = 251,
+		MYSQL_TYPE_BLOB = 252,
+		MYSQL_TYPE_VAR_STRING = 253,
+		MYSQL_TYPE_STRING = 254,
+		MYSQL_TYPE_GEOMETRY = 255
+	};
+	enum Sign : uint8_t {
+		SIGN_SIGNED = 0x00,
+		SIGN_UNSIGNED = 0x80
+
+	};
 
 public:
 	/**
@@ -235,8 +323,13 @@ public:
 	 * \param is_pre_hash	bool if set the password used will be hashed by the required type before used.
 	 * \return 				uint32_t 0 = no error, see error enum class ErrorCode
 	 */
-	ErrorCode connect_db(const String &host, const int port, const String &dbname, const String &username,
-			const String &password, const AuthType auth_type = AuthType::AUTH_TYPE_ED25519, bool is_prehashed = true);
+	ErrorCode connect_db(const String &host,
+			const int port,
+			const String &dbname,
+			const String &username,
+			const String &password,
+			const AuthType auth_type = AuthType::AUTH_TYPE_ED25519,
+			bool is_prehashed = true);
 
 	ErrorCode connect_db_ctx(const Ref<MariaDBConnectContext> &p_context);
 	void disconnect_db();
@@ -249,15 +342,22 @@ public:
 
 	// PackedByteArray get_caching_sha2_passwd_hash(PackedByteArray p_sha256_hashed_passwd, PackedByteArray
 	// p_srvr_salt);
-	PackedByteArray get_client_ed25519_signature(
-			const PackedByteArray &p_sha512_hashed_passwd, const PackedByteArray &p_svr_msg);
-	PackedByteArray get_mysql_native_password_hash(
-			const PackedByteArray &p_sha1_hashed_passwd, const PackedByteArray &p_srvr_salt);
+	PackedByteArray get_client_ed25519_signature(const PackedByteArray &p_sha512_hashed_passwd,
+			const PackedByteArray &p_svr_msg);
+	PackedByteArray get_mysql_native_password_hash(const PackedByteArray &p_sha1_hashed_passwd,
+			const PackedByteArray &p_srvr_salt);
 
 	bool is_connected_db();
 
 	TypedArray<Dictionary> select_query(const String &sql_stmt);
 	Variant query(const String &sql_stmt) { return _query(sql_stmt); }
+
+	// Prepared statement section
+	Dictionary prepared_statement(const String &sql);
+	TypedArray<Dictionary> exec_prepped_select(uint32_t stmt_id, const Array &params);
+	Dictionary exec_prepped_command(uint32_t p_stmt_id, const Array &p_params);
+	void close_statement(uint32_t stmt_id);
+
 	//TODO(sigrudds1) Implement SSL/TLS
 	//void tls_enable(bool enable);
 
@@ -274,3 +374,4 @@ public:
 VARIANT_ENUM_CAST(MariaDBConnector::AuthType);
 VARIANT_ENUM_CAST(MariaDBConnector::IpType);
 VARIANT_ENUM_CAST(MariaDBConnector::ErrorCode);
+VARIANT_ENUM_CAST(MariaDBConnector::FieldType);

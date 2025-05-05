@@ -3,7 +3,7 @@
 # chosen value in case the base style changes (last sync: Clang 14.0).
 ---
 ### General config, applies to all languages ###
-BasedOnStyle:  LLVM
+BasedOnStyle:  Google
 AccessModifierOffset: -4
 AlignAfterOpenBracket: DontAlign
 # AlignArrayOfStructures: None
@@ -29,8 +29,8 @@ AllowAllParametersOfDeclarationOnNextLine: false
 # AlwaysBreakTemplateDeclarations: MultiLine
 # AttributeMacros:
 #   - __capability
-# BinPackArguments: true
-# BinPackParameters: true
+BinPackArguments: false
+BinPackParameters: false
 # BraceWrapping:
 #   AfterCaseLabel:  false
 #   AfterClass:      false

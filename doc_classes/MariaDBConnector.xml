@@ -31,7 +31,7 @@
 				    3306,
 				    "some_db_name",
 				    "some_username",
-				    "sha512_encrypted_password_to_hex_string",
+				    "db_users_password_sha512_hex_string_hash",
 				    MariaDBConnector.AUTH_TYPE_ED25519,
 				    true)
 
@@ -51,7 +51,7 @@
 				# Using defaults for unlisted members.
 				ctx.db_name = "some_db"
 				ctx.username = "some_db_user"
-				ctx.password = "db_users_password_sha512_base64_hashed_encoded"
+				ctx.password = "db_users_password_sha512_base64_encoded_hash"
 
 				var db :=  MariaDBConnector.new()
 				var err: MariaDBConnector.ErrorCode = db.connect_db_ctx(ctx)
@@ -71,7 +71,7 @@
 				# Using defaults for unlisted members.
 				ctx.db_name = "some_db"
 				ctx.username = "some_db_user"
-				ctx.password = "db_users_password_sha512_hashed_base64_encoded"
+				ctx.password = "db_users_password_sha512_base64_encoded_hash"
 
 				var db := MariaDBConnector.connection_instance(ctx)
 				if db == null:
