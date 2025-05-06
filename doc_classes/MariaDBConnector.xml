@@ -134,6 +134,12 @@
 				Returns the last transmitted packet buffer sent to the server.
 			</description>
 		</method>
+		<method name="ping_srvr">
+			<return type="void" />
+			<description>
+				Sends a ping command to the MariaDB server to keep the connection alive.
+			</description>
+		</method>
 		<method name="prep_stmt">
 			<return type="Dictionary" />
 			<param index="0" name="sql" type="String" />
@@ -143,7 +149,7 @@
 			</description>
 		</method>
 		<method name="prep_stmt_close">
-			<return type="void" />
+			<return type="int" enum="MariaDBConnector.ErrorCode" />
 			<param index="0" name="stmt_id" type="int" />
 			<description>
 				Removes a stored prepared statement.
@@ -303,53 +309,53 @@
 		</constant>
 		<constant name="OK" value="0" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_NO_RESPONSE" value="1" enum="ErrorCode">
+		<constant name="ERR_NO_RESPONSE" value="49" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_NOT_CONNECTED" value="2" enum="ErrorCode">
+		<constant name="ERR_NOT_CONNECTED" value="50" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_PACKET_LENGTH_MISMATCH" value="3" enum="ErrorCode">
+		<constant name="ERR_PACKET_LENGTH_MISMATCH" value="51" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_SERVER_PROTOCOL_INCOMPATIBLE" value="4" enum="ErrorCode">
+		<constant name="ERR_SERVER_PROTOCOL_INCOMPATIBLE" value="52" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_CLIENT_PROTOCOL_INCOMPATIBLE" value="5" enum="ErrorCode">
+		<constant name="ERR_CLIENT_PROTOCOL_INCOMPATIBLE" value="53" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_SEQUENCE_MISMATCH" value="6" enum="ErrorCode">
+		<constant name="ERR_SEQUENCE_MISMATCH" value="54" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_AUTH_PLUGIN_NOT_SET" value="7" enum="ErrorCode">
+		<constant name="ERR_AUTH_PLUGIN_NOT_SET" value="55" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_AUTH_PLUGIN_INCOMPATIBLE" value="8" enum="ErrorCode">
+		<constant name="ERR_AUTH_PLUGIN_INCOMPATIBLE" value="56" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_AUTH_FAILED" value="9" enum="ErrorCode">
+		<constant name="ERR_AUTH_FAILED" value="57" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_USERNAME_EMPTY" value="10" enum="ErrorCode">
+		<constant name="ERR_USERNAME_EMPTY" value="58" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_PASSWORD_EMPTY" value="11" enum="ErrorCode">
+		<constant name="ERR_PASSWORD_EMPTY" value="59" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_DB_NAME_EMPTY" value="12" enum="ErrorCode">
+		<constant name="ERR_DB_NAME_EMPTY" value="60" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_PASSWORD_HASH_LENGTH" value="13" enum="ErrorCode">
+		<constant name="ERR_PASSWORD_HASH_LENGTH" value="61" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_INVALID_HOSTNAME" value="14" enum="ErrorCode">
+		<constant name="ERR_INVALID_HOSTNAME" value="62" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_CONNECTION_ERROR" value="15" enum="ErrorCode">
+		<constant name="ERR_CONNECTION_ERROR" value="63" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_INIT_ERROR" value="16" enum="ErrorCode">
+		<constant name="ERR_INIT_ERROR" value="64" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_UNAVAILABLE" value="17" enum="ErrorCode">
+		<constant name="ERR_UNAVAILABLE" value="65" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_PROTOCOL_MISMATCH" value="18" enum="ErrorCode">
+		<constant name="ERR_PROTOCOL_MISMATCH" value="66" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_AUTH_PROTOCOL_MISMATCH" value="19" enum="ErrorCode">
+		<constant name="ERR_AUTH_PROTOCOL_MISMATCH" value="67" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_SEND_FAILED" value="20" enum="ErrorCode">
+		<constant name="ERR_SEND_FAILED" value="68" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_INVALID_PORT" value="21" enum="ErrorCode">
+		<constant name="ERR_INVALID_PORT" value="69" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_UNKNOWN" value="22" enum="ErrorCode">
+		<constant name="ERR_UNKNOWN" value="70" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_PACKET" value="23" enum="ErrorCode">
+		<constant name="ERR_PACKET" value="71" enum="ErrorCode">
 		</constant>
-		<constant name="ERR_PREPARE_FAILED" value="25" enum="ErrorCode">
+		<constant name="ERR_PREPARE_FAILED" value="73" enum="ErrorCode">
 		</constant>
 		<constant name="FT_TINYINT" value="0" enum="FieldType">
 		</constant>

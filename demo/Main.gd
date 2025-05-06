@@ -83,11 +83,11 @@ func test_prepared_select() -> void:
 	var stmt: String
 	var d_res: Dictionary 
 	stmt = "SELECT * FROM Godot_Test.diff_col WHERE uint = ? LIMIT 1;"
-	d_res = ctx_db.prepared_statement(stmt)
+	d_res = ctx_db.prep_stmt(stmt)
 	if ctx_db.last_error == MariaDBConnector.ErrorCode.OK:
 		print(d_res)
 		var prepped_params: Array[Dictionary] = [{MariaDBConnector.FieldType.FT_INT_U: 1}];
-		var rows: Array[Dictionary] = ctx_db.exec_prepped_select(d_res["statement_id"], prepped_params)
+		var rows: Array[Dictionary] = ctx_db.prep_stmt_exec_select(d_res["statement_id"], prepped_params)
 		if ctx_db.last_error == MariaDBConnector.ErrorCode.OK:
 			print(rows)
 		else:
@@ -112,14 +112,14 @@ func test_prepared_cmd() -> void:
 	#var stmt: String
 	#var d_res: Dictionary 
 	var stmt: String = "UPDATE Godot_Test.diff_col SET `varchar` = ? WHERE `utiny` = ?;"
-	var d_res: Dictionary  = ctx_db.prepared_statement(stmt)
+	var d_res: Dictionary  = ctx_db.prep_stmt(stmt)
 	if ctx_db.last_error == MariaDBConnector.OK:
 		print(d_res)
 		var prepped_params: Array[Dictionary] = [
 			{MariaDBConnector.FT_VARCHAR: "changed"},
 			{MariaDBConnector.FT_TINYINT_U: 3},
 			];
-		var status: Dictionary = ctx_db.exec_prepped_command(d_res["statement_id"], prepped_params)
+		var status: Dictionary = ctx_db.prep_stmt_exec_cmd(d_res["statement_id"], prepped_params)
 		if ctx_db.last_error == MariaDBConnector.OK:
 			print(status)
 		else:
@@ -131,11 +131,11 @@ func test_prepared_cmd() -> void:
 	print()
 	
 	stmt = "SELECT `varchar`, uint FROM Godot_Test.diff_col WHERE utiny = ?;"
-	d_res = ctx_db.prepared_statement(stmt)
+	d_res = ctx_db.prep_stmt(stmt)
 	if ctx_db.last_error == MariaDBConnector.ErrorCode.OK:
 		print(d_res)
 		var prepped_params: Array[Dictionary] = [{MariaDBConnector.FT_TINYINT_U: 3}];
-		var rows: Array[Dictionary] = ctx_db.exec_prepped_select(d_res["statement_id"], prepped_params)
+		var rows: Array[Dictionary] = ctx_db.prep_stmt_exec_select(d_res["statement_id"], prepped_params)
 		if ctx_db.last_error == MariaDBConnector.ErrorCode.OK:
 			print(rows)
 		else:

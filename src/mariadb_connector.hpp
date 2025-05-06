@@ -66,8 +66,8 @@ public:
 	};
 
 	enum ErrorCode : int64_t {
-		OK = 0,
-		ERR_NO_RESPONSE,
+		OK = Error::OK,
+		ERR_NO_RESPONSE = Error::ERR_PRINTER_ON_FIRE + 1,
 		ERR_NOT_CONNECTED,
 		ERR_PACKET_LENGTH_MISMATCH,
 		ERR_SERVER_PROTOCOL_INCOMPATIBLE,
@@ -324,15 +324,16 @@ public:
 
 	bool is_connected_db();
 
-	TypedArray<Dictionary> select_query(const String &sql_stmt);
 	Variant query(const String &sql_stmt) { return _query(sql_stmt); }
-
+	void ping_srvr();
 	// Prepared statement section
 	Dictionary prepared_statement(const String &sql);
 	TypedArray<Dictionary> prepared_stmt_exec_select(uint32_t stmt_id, const TypedArray<Dictionary> &params);
 	// TypedArray<Dictionary> exec_prepped_select(uint32_t stmt_id, const Array &params);
 	Dictionary prepared_stmt_exec_cmd(uint32_t stmt_id, const TypedArray<Dictionary> &params);
-	void prepared_statement_close(uint32_t stmt_id);
+	ErrorCode prepared_statement_close(uint32_t stmt_id);
+
+	TypedArray<Dictionary> select_query(const String &sql_stmt);
 
 	//TODO(sigrudds1) Implement SSL/TLS
 	//void tls_enable(bool enable);

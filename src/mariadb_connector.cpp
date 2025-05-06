@@ -128,6 +128,7 @@ void MariaDBConnector::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_connected_db"), &MariaDBConnector::is_connected_db);
 	ClassDB::bind_method(D_METHOD("select_query", "sql_stmt"), &MariaDBConnector::select_query);
 	ClassDB::bind_method(D_METHOD("query", "sql_stmt"), &MariaDBConnector::query);
+	ClassDB::bind_method(D_METHOD("ping_srvr"), &MariaDBConnector::ping_srvr);
 
 	ClassDB::bind_method(D_METHOD("prep_stmt", "sql"), &MariaDBConnector::prepared_statement);
 	ClassDB::bind_method(
@@ -346,7 +347,8 @@ MariaDBConnector::ErrorCode MariaDBConnector::_client_protocol_v41(const AuthTyp
 	// packet has remaining data string<lenenc> key string<lenenc> value
 
 	_add_packet_header(send_buffer_pba, ++seq_num);
-	_stream->put_data(send_buffer_pba);
+	_last_error = (ErrorCode)_stream->put_data(send_buffer_pba);
+	if (_last_error != OK) return _last_error;
 
 	srvr_response_pba = _read_buffer(_server_timout_msec);
 	size_t itr = 4;
@@ -383,10 +385,10 @@ MariaDBConnector::ErrorCode MariaDBConnector::_client_protocol_v41(const AuthTyp
 
 	_add_packet_header(send_buffer_pba, ++seq_num);
 
-	Error err = _stream->put_data(send_buffer_pba);
-	if (err != Error::OK) {
+	_last_error = (ErrorCode)_stream->put_data(send_buffer_pba);
+	if (_last_error != OK) {
 		ERR_PRINT("Failed to put data!");
-		return ErrorCode::ERR_SEND_FAILED;
+		return _last_error;
 	}
 
 	srvr_response_pba = _read_buffer(_server_timout_msec);
@@ -513,33 +515,16 @@ Variant MariaDBConnector::_com_query_response(const bool p_is_command) {
 MariaDBConnector::ErrorCode MariaDBConnector::_connect() {
 	disconnect_db();
 
-	ErrorCode err;
+	_last_error = (ErrorCode)_stream->connect_to_host(_ip, _port);
 
-	Error godot_err = _stream->connect_to_host(_ip, _port);
-	switch (godot_err) {
-		case Error::OK:
-			err = ErrorCode::OK;
-			break;
-		case Error::ERR_CANT_CONNECT:
-		case Error::ERR_CONNECTION_ERROR:
-			err = ErrorCode::ERR_CONNECTION_ERROR;
-			break;
-		case Error::ERR_CANT_RESOLVE:
-			err = ErrorCode::ERR_INVALID_HOSTNAME;
-			break;
-		case Error::ERR_INVALID_PARAMETER:
-		default:
-			err = ErrorCode::ERR_INIT_ERROR;
-			break;
-	}
-
-	if (err != ErrorCode::OK) {
+	if (_last_error != ErrorCode::OK) {
 		ERR_PRINT("Cannot connect to host with IP: " + String(_ip) + " and port: " + itos(_port));
-		return err;
+		return _last_error;
 	}
 
 	for (size_t i = 0; i < 1000; i++) {
-		_stream->poll();
+		_last_error = (ErrorCode)_stream->poll();
+		if (_last_error != OK) return _last_error;
 		if (_stream->get_status() == StreamPeerTCP::STATUS_CONNECTED) {
 			break;
 		} else {
@@ -1196,8 +1181,7 @@ MariaDBConnector::ErrorCode MariaDBConnector::_prepared_params_send(const uint32
 	}
 
 	_add_packet_header(tx_buf, 0);
-	_stream->put_data(tx_buf);
-	return ErrorCode::OK;
+	return (ErrorCode)_stream->put_data(tx_buf);
 }
 
 Variant MariaDBConnector::_query(const String &p_sql_stmt, const bool p_is_command) {
@@ -1218,7 +1202,6 @@ Variant MariaDBConnector::_query(const String &p_sql_stmt, const bool p_is_comma
 			return (uint32_t)ErrorCode::ERR_AUTH_FAILED;
 		}
 	}
-	// _tcp_polling = true;
 
 	PackedByteArray send_buffer_vec;
 
@@ -1229,13 +1212,10 @@ Variant MariaDBConnector::_query(const String &p_sql_stmt, const bool p_is_comma
 	_add_packet_header(send_buffer_vec, 0);
 
 	_last_transmitted = send_buffer_vec;
-	// _tcp_mutex.lock();
-	_stream->put_data(send_buffer_vec);
-	// _tcp_mutex.unlock();
+	_last_error = (ErrorCode)_stream->put_data(send_buffer_vec);
+	if (_last_error != OK) return _last_error;
 
-	Variant res = _com_query_response(p_is_command);
-
-	return res;
+	return _com_query_response(p_is_command);
 }
 
 MariaDBConnector::ErrorCode MariaDBConnector::_rcv_bfr_chk(PackedByteArray &p_bfr,
@@ -1260,7 +1240,9 @@ PackedByteArray MariaDBConnector::_read_buffer(uint32_t p_timeout, uint32_t p_ex
 	uint64_t time_lapse = 0;
 	bool data_rcvd = false;
 	while (is_connected_db() && time_lapse < p_timeout) {
-		_stream->poll();
+		_last_error = (ErrorCode)_stream->poll();
+		if (_last_error != OK) return PackedByteArray();
+
 		byte_cnt = _stream->get_available_bytes();
 		if (byte_cnt > 0) {
 			out_buffer.append_array(_stream->get_data(byte_cnt)[1]);
@@ -1616,7 +1598,7 @@ void MariaDBConnector::disconnect_db() {
 		// uint8_t output[5] = {0x01, 0x00, 0x00, 0x00, 0x01};
 		// String str = "0100000001";
 		// _stream->put_data(str.hex_decode());
-		_stream->put_data(PackedByteArray({ 0x01, 0x00, 0x00, 0x00, 0x01 }));
+		_last_error = (ErrorCode)_stream->put_data(PackedByteArray({ 0x01, 0x00, 0x00, 0x00, 0x01 }));
 		_stream->disconnect_from_host();
 	}
 	_authenticated = false;
@@ -1669,8 +1651,12 @@ PackedByteArray MariaDBConnector::get_mysql_native_password_hash(const PackedByt
 }
 
 bool MariaDBConnector::is_connected_db() {
-	_stream->poll();
+	_last_error = (ErrorCode)_stream->poll();
 	return _stream->get_status() == StreamPeerTCP::STATUS_CONNECTED;
+}
+
+void MariaDBConnector::ping_srvr() {
+	if (is_connected_db()) _stream->put_data(PackedByteArray({ 0x01, 0x00, 0x00, 0x00, 0x0E }));
 }
 
 Dictionary MariaDBConnector::prepared_statement(const String &p_sql) {
@@ -1682,7 +1668,8 @@ Dictionary MariaDBConnector::prepared_statement(const String &p_sql) {
 	_add_packet_header(send_buffer_vec, 0);
 	_last_transmitted = send_buffer_vec;
 
-	_stream->put_data(send_buffer_vec);
+	_last_error = (ErrorCode)_stream->put_data(send_buffer_vec);
+	if (_last_error != OK) return Dictionary();
 	PackedByteArray rx_bfr = _read_buffer(_server_timout_msec);
 	if (rx_bfr.is_empty()) {
 		_last_error = ErrorCode::ERR_NO_RESPONSE;
@@ -1831,13 +1818,14 @@ Dictionary MariaDBConnector::prepared_stmt_exec_cmd(uint32_t p_stmt_id, const Ty
 	return result;
 }
 
-void MariaDBConnector::prepared_statement_close(uint32_t stmt_id) {
+MariaDBConnector::ErrorCode MariaDBConnector::prepared_statement_close(uint32_t stmt_id) {
 	PackedByteArray send_buffer_vec;
 	send_buffer_vec.push_back(0x19);  // COM_STMT_CLOSE code (0x17)
 	send_buffer_vec.encode_u32(send_buffer_vec.size(), stmt_id);
 	send_buffer_vec.resize(send_buffer_vec.size() + 4);
 	_add_packet_header(send_buffer_vec, 0);
-	_stream->put_data(send_buffer_vec);
+	_last_error = (ErrorCode)_stream->put_data(send_buffer_vec);
+	return _last_error;
 }
 
 TypedArray<Dictionary> MariaDBConnector::select_query(const String &p_sql_stmt) {
