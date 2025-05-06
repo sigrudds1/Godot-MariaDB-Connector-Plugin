@@ -20,12 +20,13 @@
 			<param index="6" name="is_prehashed" type="bool" default="true" />
 			<description>
 				Establishes a connection to the MariaDB server using the provided host, port, database name, username, and password.
-				[codeblock]
-				If is_prehashed = true then
+				[codeblocks]
+					If is_prehashed = true then
 				    If authtype = AUTH_TYPE_MYSQL_NATIVE, the password string must be sha1 hex hash of the plain password.
 				    If authtype = AUTH_TYPE_ED25519, the password string must be sha512 hex hash of the plain password.
-				[/codeblock]
-				[codeblock lang=gdscript]
+				[/codeblocks]
+				[codeblocks]
+				[gdscript]
 				var err: MariaDBConnector.ErrorCode = db.connect_db(
 				    "localhost",
 				    3306,
@@ -38,7 +39,8 @@
 				if err != MariaDBConnector.ErrorCode.OK:
 				    push_error(err)
 				    return
-				[/codeblock]
+				[/gdscript]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="connect_db_ctx">
@@ -46,9 +48,10 @@
 			<param index="0" name="mariadb_connect_context" type="MariaDBConnectContext" />
 			<description>
 				Establishes a connection to the MariaDB server using a context.
-				[codeblock lang=gdscript]
+				[codeblocks]
+				[gdscript]
 				var ctx := MariaDBConnectContext.new()
-				# Using defaults for unlisted members.
+				# Using defaults for unlisted member variables.
 				ctx.db_name = "some_db"
 				ctx.username = "some_db_user"
 				ctx.password = "db_users_password_sha512_base64_encoded_hash"
@@ -58,6 +61,7 @@
 				if err != MariaDBConnector.ErrorCode.OK:
 				    push_error(err)
 				    return
+				[/gdscript]
 				[/codeblock]
 			</description>
 		</method>
@@ -66,9 +70,10 @@
 			<param index="0" name="mariadb_connect_context" type="MariaDBConnectContext" />
 			<description>
 				Static member that returns a connected MariaDBConnector instance or null.
-				[codeblock lang=gdscript]
+				[codeblocks]
+				[gdscript]
 				var ctx := MariaDBConnectContext.new()
-				# Using defaults for unlisted members.
+				# Using defaults for unlisted member variables.
 				ctx.db_name = "some_db"
 				ctx.username = "some_db_user"
 				ctx.password = "db_users_password_sha512_base64_encoded_hash"
@@ -77,7 +82,8 @@
 				if db == null:
 				    # Error is already printed by the addon.
 				    return
-				[/codeblock]
+				[/gdscript]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="disconnect_db">
@@ -90,9 +96,9 @@
 			<return type="Dictionary" />
 			<param index="0" name="sql_stmt" type="String" />
 			<description>
-				Returns a [Dictionary] with the affected_rows, last_insert_id, status_flags, warnings, and info for all 
-					none SELECT command types like INSERT, UPDATE, DELETE, BEGIN, COMMIT and ROLLBACK.
-				[codeblock lang=gdscript]
+				Returns a [Dictionary] with the affected_rows, last_insert_id, status_flags, warnings, and info for all none SELECT command types like INSERT, UPDATE, DELETE, BEGIN, COMMIT and ROLLBACK.
+				[codeblocks]
+				[gdscript]
 				var stmt: String = "INSERT INTO table_name (val) VALUES (1234);"
 				var res: Dictionary = db.execute_command(stmt)
 				if db.last_error != MariaDBConnector.ErrorCode.OK:
@@ -100,7 +106,8 @@
 				else:
 				    print("rows affected:", res["affected_rows"])
 				    print("Last Inserted ID:", res["last_insert_id"])
-				[/codeblock]
+				[/gdscript]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="get_last_error" qualifiers="const">
@@ -127,6 +134,100 @@
 				Returns the last transmitted packet buffer sent to the server.
 			</description>
 		</method>
+		<method name="prep_stmt">
+			<return type="Dictionary" />
+			<param index="0" name="sql" type="String" />
+			<description>
+				Creates and stores a prepared statement ti be reuses by the returned statement_id.
+				[color=yellow][b]Note:[/b][/color] Prepared statements are [b]less efficient[/b] than regular queries when not being reused within and [b]only[/b] within the same connection instance.
+			</description>
+		</method>
+		<method name="prep_stmt_close">
+			<return type="void" />
+			<param index="0" name="stmt_id" type="int" />
+			<description>
+				Removes a stored prepared statement.
+			</description>
+		</method>
+		<method name="prep_stmt_exec_cmd">
+			<return type="Dictionary" />
+			<param index="0" name="stmt_id" type="int" />
+			<param index="1" name="params" type="Dictionary[]" />
+			<description>
+				Excecutes a command (INSERT, UPDATE, DELETE, BEGIN, ROLLBACK, COMMIT, ETC) type prepared_statement that expect a status resopnse. The params are passes using an [Array][[Dictionary]] with each index having [FieldType] as a key and the parameter value as value.
+				[color=yellow][b]Note:[/b][/color] Prepared statements are [b]less efficient[/b] than regular queries when not being reused within and [b]only[/b] within the same connection instance.
+				[codeblocks]
+				[gdscript]
+				var ctx: MariaDBConnectContext = MariaDBConnectContext.new()
+				# Using defaults for unlisted member variables.
+				ctx.db_name = "some_db"
+				ctx.username = "some_db_user"
+				ctx.password = "db_users_password_sha512_base64_encoded_hash"
+
+				var ctx_db: MariaDBConnector = MariaDBConnector.connection_instance(ctx)
+				if ctx_db == null:
+				    # Error is already printed by the addon.
+				    return
+
+				var stmt: String = "UPDATE table_name SET `varchar` = ? WHERE `utiny` = ?;"	
+				var d_res: Dictionary  = ctx_db.prepared_statement(stmt)
+				if ctx_db.last_error == MariaDBConnector.OK:
+				    print(d_res)
+				    var prepped_params: Array[Dictionary] = [
+				        {MariaDBConnector.FT_VARCHAR: "changed"},
+				        {MariaDBConnector.FT_TINYINT_U: 3},
+				        ];
+					var status: Dictionary = ctx_db.exec_prepped_command(d_res["statement_id"], prepped_params)
+					if ctx_db.last_error == MariaDBConnector.OK:
+					    print(status)
+					else:
+					    printerr("Error %d on exe_prep_select id:%d" % [ctx_db.last_error, int(d_res["statement_id"])])
+				else:
+					printerr("Error %d on preppared ststement %s!" % [ctx_db.last_error, stmt])
+
+				print()
+				[/gdscript]
+				[/codeblocks]
+			</description>
+		</method>
+		<method name="prep_stmt_exec_select">
+			<return type="Dictionary[]" />
+			<param index="0" name="stmt_id" type="int" />
+			<param index="1" name="params" type="Dictionary[]" />
+			<description>
+				Excecutes a SELECT type prepared_statement. The params are passes using an [Array][[Dictionary]] with each index having [FieldType] as a key and the parameter value as value.
+				[color=yellow][b]Note:[/b][/color] Prepared statements are [b]less efficient[/b] than regular queries when not being reused within and [b]only[/b] within the same connection instance.
+				[codeblocks]
+				[gdscript]
+				var ctx: MariaDBConnectContext = MariaDBConnectContext.new()
+				# Using defaults for unlisted membe variables.
+				ctx.db_name = "some_db"
+				ctx.username = "some_db_user"
+				ctx.password = "db_users_password_sha512_base64_encoded_hash"
+
+				var ctx_db: MariaDBConnector = MariaDBConnector.connection_instance(ctx)
+				if ctx_db == null:
+				    # Error is already printed by the addon.
+				    return
+
+				var stmt: String = "SELECT * FROM table_name WHERE uint = ? LIMIT 1;"	
+				var d_res: Dictionary  = ctx_db.prepared_statement(stmt)
+				if ctx_db.last_error == MariaDBConnector.OK:
+				    print(d_res)
+				    var prepped_params: Array[Dictionary] = [{MariaDBConnector.FieldType.FT_INT_U: 1}];
+				    var status: Dictionary = ctx_db.exec_prepped_command(d_res["statement_id"], prepped_params)
+				    if ctx_db.last_error == MariaDBConnector.OK:
+				        print(status)
+				    else:
+				        printerr("Error %d on exe_prep_select id:%d" % [ctx_db.last_error, int(d_res["statement_id"])])
+				else:
+				    printerr("Error %d on preppared ststement %s!" % [ctx_db.last_error, stmt])
+
+				print()
+				[/gdscript]
+				[/codeblocks]
+			</description>
+		</method>
 		<method name="query">
 			<return type="Variant" />
 			<param index="0" name="sql_stmt" type="String" />
@@ -139,15 +240,17 @@
 			<param index="0" name="sql_stmt" type="String" />
 			<description>
 				Strict typed return of [Array][[Dictionary]] instead of Variant, use last_error to check for error.
-				[codeblock lang=gdscript]
+				[codeblocks]
+				[gdscript]
 				var stmt: String = "SELECT * FROM table_name;"
 				var rows: Array[Dictionary] = db.select_query(stmt)
 				if db.last_error == MariaDBConnector.ErrorCode.OK:
-				   for row:Dictionary in rows:
-				       print("row:", row)
+				    for row:Dictionary in rows:
+				        print("row:", row)
 				else:
-				   printerr("Error %d on sSELECT" % [db.last_error])
-				[/codeblock]
+				    printerr("Error %d on sSELECT" % [db.last_error])
+				[/gdscript]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="set_db_name">
@@ -181,7 +284,7 @@
 	</methods>
 	<members>
 		<member name="is_connected_db" type="bool" setter="" getter="is_connected_db" default="false">
-			True if client is still conneced to the MariaDB server, this is not 100%, someimtes, when timeout occurs (about ~20min), MariaiDB will drop a connection without closing the socket.
+			True if client is still conneced to the MariaDB server, this is not 100%, sometimes, when timeout occurs (about ~20min), MariaiDB will drop a connection without closing the socket.
 		</member>
 		<member name="last_error" type="int" setter="" getter="get_last_error_code" enum="MariaDBConnector.ErrorCode" default="0">
 			Holds the ErrorCode of the last function and updated on every function call.
@@ -245,6 +348,70 @@
 		<constant name="ERR_UNKNOWN" value="22" enum="ErrorCode">
 		</constant>
 		<constant name="ERR_PACKET" value="23" enum="ErrorCode">
+		</constant>
+		<constant name="ERR_PREPARE_FAILED" value="25" enum="ErrorCode">
+		</constant>
+		<constant name="FT_TINYINT" value="0" enum="FieldType">
+		</constant>
+		<constant name="FT_TINYINT_U" value="1" enum="FieldType">
+		</constant>
+		<constant name="FT_SHORT" value="2" enum="FieldType">
+		</constant>
+		<constant name="FT_SHORT_U" value="3" enum="FieldType">
+		</constant>
+		<constant name="FT_INT" value="4" enum="FieldType">
+		</constant>
+		<constant name="FT_INT_U" value="5" enum="FieldType">
+		</constant>
+		<constant name="FT_FLOAT" value="6" enum="FieldType">
+		</constant>
+		<constant name="FT_DOUBLE" value="7" enum="FieldType">
+		</constant>
+		<constant name="FT_TIMESTAMP" value="8" enum="FieldType">
+		</constant>
+		<constant name="FT_BIGINT" value="9" enum="FieldType">
+		</constant>
+		<constant name="FT_BIGINT_U" value="10" enum="FieldType">
+		</constant>
+		<constant name="FT_MEDIUMINT" value="11" enum="FieldType">
+		</constant>
+		<constant name="FT_MEDIUMINT_U" value="12" enum="FieldType">
+		</constant>
+		<constant name="FT_DATE" value="13" enum="FieldType">
+		</constant>
+		<constant name="FT_TIME" value="14" enum="FieldType">
+		</constant>
+		<constant name="FT_DATETIME" value="15" enum="FieldType">
+		</constant>
+		<constant name="FT_YEAR" value="16" enum="FieldType">
+		</constant>
+		<constant name="FT_NEWDATE" value="17" enum="FieldType">
+		</constant>
+		<constant name="FT_VARCHAR" value="18" enum="FieldType">
+		</constant>
+		<constant name="FT_BIT" value="19" enum="FieldType">
+		</constant>
+		<constant name="FT_JSON" value="20" enum="FieldType">
+		</constant>
+		<constant name="FT_DECIMAL" value="21" enum="FieldType">
+		</constant>
+		<constant name="FT_ENUM" value="22" enum="FieldType">
+		</constant>
+		<constant name="FT_SET" value="23" enum="FieldType">
+		</constant>
+		<constant name="FT_TINYBLOB" value="24" enum="FieldType">
+		</constant>
+		<constant name="FT_MEDIUMBLOB" value="25" enum="FieldType">
+		</constant>
+		<constant name="FT_LONGBLOB" value="26" enum="FieldType">
+		</constant>
+		<constant name="FT_BLOB" value="27" enum="FieldType">
+		</constant>
+		<constant name="FT_VAR_STRING" value="28" enum="FieldType">
+		</constant>
+		<constant name="FT_STRING" value="29" enum="FieldType">
+		</constant>
+		<constant name="FT_GEOMETRY" value="30" enum="FieldType">
 		</constant>
 	</constants>
 </class>

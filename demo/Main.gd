@@ -39,8 +39,8 @@ var _auth_type: AuthType = AuthType.ED25519_HASHED
 
 func _ready() -> void:
 	
-	#db = MariaDBConnector.new()
-	#_connect_to_db_srvr(_auth_type)
+	db = MariaDBConnector.new()
+	_connect_to_db_srvr(_auth_type)
 	# Use inserts once to build data if using structure only
 	# The release zip has the full db
 #	_insert_many_columns() 
@@ -55,8 +55,8 @@ func _ready() -> void:
 	
 	#context_connection()
 	#instantiated_connection()
-	test_prepared_select()
-	#test_prepared()
+	#test_prepared_select()
+	test_prepared_cmd()
 	
 
 
@@ -64,8 +64,13 @@ func _exit_tree() -> void:
 	if db != null:
 		db.disconnect_db()
 
+func test_doc_paste() -> void:
+
+	pass
+
 func test_prepared_select() -> void:
 	var ctx := MariaDBConnectContext.new()
+	# Using defaults for unlisted member variables.
 	ctx.db_name = ed["db_name"] as String
 	ctx.username = ed["db_ed_user"] as String
 	ctx.password = ed["db_sha512_hashed_pwd_b64"] as String
@@ -78,13 +83,58 @@ func test_prepared_select() -> void:
 	var stmt: String
 	var d_res: Dictionary 
 	stmt = "SELECT * FROM Godot_Test.diff_col WHERE uint = ? LIMIT 1;"
-	#stmt = "SELECT * FROM Godot_Test.diff_col WHERE uint = ? AND utiny = ? LIMIT 1;"
-	#stmt = "SELECT * FROM Godot_Test.diff_col WHERE uint = 1 LIMIT 1;"
 	d_res = ctx_db.prepared_statement(stmt)
 	if ctx_db.last_error == MariaDBConnector.ErrorCode.OK:
 		print(d_res)
-		var prepped_params: Array = [1];
-		#var prepped_params: Array = [1, 3];
+		var prepped_params: Array[Dictionary] = [{MariaDBConnector.FieldType.FT_INT_U: 1}];
+		var rows: Array[Dictionary] = ctx_db.exec_prepped_select(d_res["statement_id"], prepped_params)
+		if ctx_db.last_error == MariaDBConnector.ErrorCode.OK:
+			print(rows)
+		else:
+			printerr("Error %d on exe_prep_select id:%d" % [ctx_db.last_error, int(d_res["statement_id"])])
+			
+	else:
+		printerr("Error %d on preppared ststement %s!" % [ctx_db.last_error, stmt])
+	print()
+
+
+func test_prepared_cmd() -> void:
+	var ctx := MariaDBConnectContext.new()
+	# Using defaults for unlisted member variables.
+	ctx.db_name = ed["db_name"] as String
+	ctx.username = ed["db_ed_user"] as String
+	ctx.password = ed["db_sha512_hashed_pwd_b64"] as String
+	
+	var ctx_db := MariaDBConnector.connection_instance(ctx)
+	if ctx_db == null:
+		# Error is already printed by the addon
+		return
+	#var stmt: String
+	#var d_res: Dictionary 
+	var stmt: String = "UPDATE Godot_Test.diff_col SET `varchar` = ? WHERE `utiny` = ?;"
+	var d_res: Dictionary  = ctx_db.prepared_statement(stmt)
+	if ctx_db.last_error == MariaDBConnector.OK:
+		print(d_res)
+		var prepped_params: Array[Dictionary] = [
+			{MariaDBConnector.FT_VARCHAR: "changed"},
+			{MariaDBConnector.FT_TINYINT_U: 3},
+			];
+		var status: Dictionary = ctx_db.exec_prepped_command(d_res["statement_id"], prepped_params)
+		if ctx_db.last_error == MariaDBConnector.OK:
+			print(status)
+		else:
+			printerr("Error %d on exe_prep_select id:%d" % [ctx_db.last_error, int(d_res["statement_id"])])
+			
+	else:
+		printerr("Error %d on preppared ststement %s!" % [ctx_db.last_error, stmt])
+	
+	print()
+	
+	stmt = "SELECT `varchar`, uint FROM Godot_Test.diff_col WHERE utiny = ?;"
+	d_res = ctx_db.prepared_statement(stmt)
+	if ctx_db.last_error == MariaDBConnector.ErrorCode.OK:
+		print(d_res)
+		var prepped_params: Array[Dictionary] = [{MariaDBConnector.FT_TINYINT_U: 3}];
 		var rows: Array[Dictionary] = ctx_db.exec_prepped_select(d_res["statement_id"], prepped_params)
 		if ctx_db.last_error == MariaDBConnector.ErrorCode.OK:
 			print(rows)
@@ -94,68 +144,8 @@ func test_prepared_select() -> void:
 	else:
 		printerr("Error %d on preppared ststement %s!" % [ctx_db.last_error, stmt])
 	
+	
 	print()
-	#
-	#stmt = "SELECT * FROM Godot_Test.diff_col WHERE uint = ? LIMIT 2;"
-	#d_res = ctx_db.prepared_statement(stmt)
-	#if ctx_db.last_error == MariaDBConnector.ErrorCode.OK:
-		#print(d_res)
-		#var prepped_params: Array = [1];
-		#var rows: Array[Dictionary] = ctx_db.exec_prepped_select(d_res["statement_id"], prepped_params)
-		#if ctx_db.last_error == MariaDBConnector.ErrorCode.OK:
-			#print(rows)
-		#else:
-			#printerr("Error %d on exe_prep_select id:%d" % [ctx_db.last_error, int(d_res["statement_id"])])
-			#
-	#else:
-		#printerr("Error %d on preppared ststement %s!" % [ctx_db.last_error, stmt])
-	#
-	#print()
-
-
-func test_prepared() -> void:
-	var ctx := MariaDBConnectContext.new()
-	ctx.db_name = ed["db_name"] as String
-	ctx.username = ed["db_ed_user"] as String
-	ctx.password = ed["db_sha512_hashed_pwd_b64"] as String
-	
-	var ctx_db := MariaDBConnector.connection_instance(ctx)
-	if ctx_db == null:
-		# Error is already printed by the addon
-		return
-	var stmt: String
-	var d_res: Dictionary 
-	stmt = "UPDATE Godot_Test.diff_col SET `varchar` = ? WHERE `utiny` = ?;"
-	d_res = ctx_db.prepared_statement(stmt)
-	if ctx_db.last_error == MariaDBConnector.ErrorCode.OK:
-		print(d_res)
-		var prepped_params: Array = ["update" , 3];
-		var status: Dictionary = ctx_db.exec_prepped_command(d_res["statement_id"], prepped_params)
-		if ctx_db.last_error == MariaDBConnector.ErrorCode.OK:
-			print(status)
-		else:
-			printerr("Error %d on exe_prep_select id:%d" % [ctx_db.last_error, int(d_res["statement_id"])])
-			
-	else:
-		printerr("Error %d on preppared ststement %s!" % [ctx_db.last_error, stmt])
-	
-	#print()
-	#stmt = "SELECT * FROM Godot_Test.diff_col WHERE uint = ?;"
-	#d_res = ctx_db.prepared_statement(stmt)
-	#if ctx_db.last_error == MariaDBConnector.ErrorCode.OK:
-		#print(d_res)
-		#var prepped_params: Array = [1];
-		#var rows: Array[Dictionary] = ctx_db.exec_prepped_select(d_res["statement_id"], prepped_params)
-		#if ctx_db.last_error == MariaDBConnector.ErrorCode.OK:
-			#print(rows)
-		#else:
-			#printerr("Error %d on exe_prep_select id:%d" % [ctx_db.last_error, int(d_res["statement_id"])])
-			#
-	#else:
-		#printerr("Error %d on preppared ststement %s!" % [ctx_db.last_error, stmt])
-	#
-	#
-	#print()
 
 
 func context_connection() -> void:
@@ -189,8 +179,7 @@ func context_connection() -> void:
 	stmt += "(%d, %d, %d, %d, '%s');" % [type, zone, plyr_id, map_id, txt]
 	var res: Dictionary = ctx_db.execute_command(stmt)
 	if ctx_db.last_error == MariaDBConnector.ErrorCode.OK:
-		pass
-		#print("rows affected:", res)
+		print("rows affected:", res)
 	else:
 		printerr("Error %d on INSERT" % [ctx_db.last_error])
 	
@@ -199,8 +188,7 @@ func context_connection() -> void:
 		type, zone, plyr_id, map_id]
 	var rows: Array[Dictionary] = ctx_db.select_query(stmt)
 	if ctx_db.last_error == MariaDBConnector.ErrorCode.OK:
-		pass
-		#print("rows:", rows)
+		print("rows:", rows)
 	else:
 		printerr("Error %d on select" % [ctx_db.last_error])
 

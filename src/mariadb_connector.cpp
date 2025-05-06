@@ -114,11 +114,12 @@ void MariaDBConnector::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("select_query", "sql_stmt"), &MariaDBConnector::select_query);
 	ClassDB::bind_method(D_METHOD("query", "sql_stmt"), &MariaDBConnector::query);
 
-	ClassDB::bind_method(D_METHOD("prepared_statement", "sql"), &MariaDBConnector::prepared_statement);
-	ClassDB::bind_method(D_METHOD("exec_prepped_select", "stmt_id", "params"), &MariaDBConnector::exec_prepped_select);
+	ClassDB::bind_method(D_METHOD("prep_stmt", "sql"), &MariaDBConnector::prepared_statement);
 	ClassDB::bind_method(
-			D_METHOD("exec_prepped_command", "stmt_id", "params"), &MariaDBConnector::exec_prepped_command);
-	ClassDB::bind_method(D_METHOD("close_statement", "stmt_id"), &MariaDBConnector::close_statement);
+			D_METHOD("prep_stmt_exec_select", "stmt_id", "params"), &MariaDBConnector::prepared_stmt_exec_select);
+	ClassDB::bind_method(
+			D_METHOD("prep_stmt_exec_cmd", "stmt_id", "params"), &MariaDBConnector::prepared_stmt_exec_cmd);
+	ClassDB::bind_method(D_METHOD("prep_stmt_close", "stmt_id"), &MariaDBConnector::prepared_statement_close);
 
 	ClassDB::bind_method(D_METHOD("set_dbl_to_string", "is_to_str"), &MariaDBConnector::set_dbl_to_string);
 	ClassDB::bind_method(D_METHOD("set_db_name", "db_name"), &MariaDBConnector::set_db_name);
@@ -161,39 +162,37 @@ void MariaDBConnector::_bind_methods() {
 	BIND_ENUM_CONSTANT(ERR_PACKET);
 	BIND_ENUM_CONSTANT(ERR_PREPARE_FAILED);
 
-	BIND_ENUM_CONSTANT(FIELD_TYPE_DECIMAL);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_TINY);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_UTINY);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_SHORT);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_USHORT);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_LONG);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_ULONG);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_FLOAT);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_DOUBLE);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_NULL);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_TIMESTAMP);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_LONGLONG);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_ULONGLONG);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_INT24);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_UINT24);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_DATE);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_TIME);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_DATETIME);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_YEAR);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_NEWDATE);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_VARCHAR);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_BIT);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_JSON);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_NEWDECIMAL);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_ENUM);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_SET);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_TINY_BLOB);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_MEDIUM_BLOB);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_LONG_BLOB);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_BLOB);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_VAR_STRING);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_STRING);
-	BIND_ENUM_CONSTANT(FIELD_TYPE_GEOMETRY);
+	BIND_ENUM_CONSTANT(FT_TINYINT);
+	BIND_ENUM_CONSTANT(FT_TINYINT_U);
+	BIND_ENUM_CONSTANT(FT_SHORT);
+	BIND_ENUM_CONSTANT(FT_SHORT_U);
+	BIND_ENUM_CONSTANT(FT_INT);
+	BIND_ENUM_CONSTANT(FT_INT_U);
+	BIND_ENUM_CONSTANT(FT_FLOAT);
+	BIND_ENUM_CONSTANT(FT_DOUBLE);
+	BIND_ENUM_CONSTANT(FT_TIMESTAMP);
+	BIND_ENUM_CONSTANT(FT_BIGINT);
+	BIND_ENUM_CONSTANT(FT_BIGINT_U);
+	BIND_ENUM_CONSTANT(FT_MEDIUMINT);
+	BIND_ENUM_CONSTANT(FT_MEDIUMINT_U);
+	BIND_ENUM_CONSTANT(FT_DATE);
+	BIND_ENUM_CONSTANT(FT_TIME);
+	BIND_ENUM_CONSTANT(FT_DATETIME);
+	BIND_ENUM_CONSTANT(FT_YEAR);
+	BIND_ENUM_CONSTANT(FT_NEWDATE);
+	BIND_ENUM_CONSTANT(FT_VARCHAR);
+	BIND_ENUM_CONSTANT(FT_BIT);
+	BIND_ENUM_CONSTANT(FT_JSON);
+	BIND_ENUM_CONSTANT(FT_DECIMAL);
+	BIND_ENUM_CONSTANT(FT_ENUM);
+	BIND_ENUM_CONSTANT(FT_SET);
+	BIND_ENUM_CONSTANT(FT_TINYBLOB);
+	BIND_ENUM_CONSTANT(FT_MEDIUMBLOB);
+	BIND_ENUM_CONSTANT(FT_LONGBLOB);
+	BIND_ENUM_CONSTANT(FT_BLOB);
+	BIND_ENUM_CONSTANT(FT_VAR_STRING);
+	BIND_ENUM_CONSTANT(FT_STRING);
+	BIND_ENUM_CONSTANT(FT_GEOMETRY);
 }
 
 // Custom Functions
@@ -686,11 +685,10 @@ PackedByteArray MariaDBConnector::_get_pkt_bytes_adv_idx(const PackedByteArray &
 	return rtn;
 }
 
-TypedArray<Dictionary> MariaDBConnector::_parse_prepared_exec(PackedByteArray &p_buf,
+TypedArray<Dictionary> MariaDBConnector::_parse_prepared_exec(PackedByteArray &p_rx_bfr,
 		size_t &p_pkt_idx,
 		const TypedArray<Dictionary> &p_col_defs,
 		const bool p_dep_eof) {
-	print_line("p_col_defs:", p_col_defs);
 	const uint32_t col_cnt = p_col_defs.size();
 	int bfr_size;
 
@@ -702,82 +700,70 @@ TypedArray<Dictionary> MariaDBConnector::_parse_prepared_exec(PackedByteArray &p
 	TypedArray<Dictionary> rows;
 	const int nullmap_bytes = (col_cnt + 7 + 2) / 8;
 
-	print_line("nullmap_bytes:", nullmap_bytes);
-
 	while (true) {
 		// Validate packet header presence (first 4 bytes)
-		_last_error = _rcv_bfr_chk(p_buf, bfr_size, p_pkt_idx, 4);
+		_last_error = _rcv_bfr_chk(p_rx_bfr, bfr_size, p_pkt_idx, 4);
 		ERR_FAIL_COND_V_EDMSG(_last_error != OK,
 				TypedArray<Dictionary>(),
 				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + 4));
 
-		size_t pkt_len = bytes_to_num_adv_itr<size_t>(p_buf.ptr(), 3, p_pkt_idx);
-		_last_error = _rcv_bfr_chk(p_buf, bfr_size, p_pkt_idx, pkt_len);
+		size_t pkt_len = bytes_to_num_adv_itr<size_t>(p_rx_bfr.ptr(), 3, p_pkt_idx);
+		_last_error = _rcv_bfr_chk(p_rx_bfr, bfr_size, p_pkt_idx, pkt_len);
 		ERR_FAIL_COND_V_EDMSG(_last_error != OK,
 				TypedArray<Dictionary>(),
 				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + pkt_len));
 
-		print_line("p_pkt_idx:", p_pkt_idx, " pkt_len:", pkt_len);
-
-		uint8_t seq_num = p_buf[p_pkt_idx++];
-		uint8_t header_byte = p_buf[p_pkt_idx++];  // 0x00 or 0xFE
+		uint8_t seq_num = p_rx_bfr[p_pkt_idx++];
+		uint8_t header_byte = p_rx_bfr[p_pkt_idx++];  // 0x00 or 0xFE
 
 		if (header_byte == 0xFE && pkt_len == 7) {
 			p_pkt_idx += pkt_len;
 			break;
 		}
 
-		print_line("p_pkt_idx:",
-				p_pkt_idx,
-				" nullmap_bytes start  bytes:",
-				p_buf.slice(p_pkt_idx, p_buf.size()).hex_encode());
 		const size_t nullmap_start = p_pkt_idx;
 		p_pkt_idx += nullmap_bytes;	 // Advance past null bitmap
-		print_line("p_pkt_idx:", p_pkt_idx, " remain row bytes:", p_buf.slice(p_pkt_idx, p_buf.size()).hex_encode());
 		Dictionary row;
 		for (uint32_t c = 0; c < col_cnt; ++c) {
 			int byte_i = (c + 2) >> 3;
 			int bit_i = (c + 2) & 7;
-			bool is_null = (p_buf[nullmap_start + byte_i] >> bit_i) & 1;
+			bool is_null = (p_rx_bfr[nullmap_start + byte_i] >> bit_i) & 1;
 
 			const Dictionary &col_meta = p_col_defs[c];
 			int type_code = int(col_meta["field_type"]);
 			bool is_unsigned = int(col_meta["flags"]) & 32;
 			String col_name = String(col_meta["name"]);
 			Variant value;
-			print_line("p_pkt_idx:", p_pkt_idx, " type_code:", type_code, " col:", c + 1);
-			print_line("p_pkt_idx:", p_pkt_idx, " starting bytes:", p_buf.slice(p_pkt_idx, p_buf.size()).hex_encode());
 			if (is_null) {
-				print_line("is_null");
 				value = Variant();
 			} else {
 				switch (MySqlFieldType(type_code)) {
 					case MYSQL_TYPE_TINY:
-						value = bytes_to_num_adv_itr<uint8_t>(p_buf.ptr(), 1, p_pkt_idx);
+						value = bytes_to_num_adv_itr<uint8_t>(p_rx_bfr.ptr(), 1, p_pkt_idx);
 						break;
 					case MYSQL_TYPE_SHORT:
 					case MYSQL_TYPE_YEAR:
-						value = bytes_to_num_adv_itr<uint16_t>(p_buf.ptr(), 2, p_pkt_idx);
+						value = bytes_to_num_adv_itr<uint16_t>(p_rx_bfr.ptr(), 2, p_pkt_idx);
 						break;
 					case MYSQL_TYPE_INT24:
-						value = bytes_to_num_adv_itr<uint32_t>(p_buf.ptr(), 3, p_pkt_idx);
+						value = bytes_to_num_adv_itr<uint32_t>(p_rx_bfr.ptr(), 3, p_pkt_idx);
 						break;
 					case MYSQL_TYPE_LONG:
-						value = bytes_to_num_adv_itr<uint32_t>(p_buf.ptr(), 4, p_pkt_idx);
+						value = bytes_to_num_adv_itr<uint32_t>(p_rx_bfr.ptr(), 4, p_pkt_idx);
 						break;
 					case MYSQL_TYPE_FLOAT: {
 						float fval;
-						memcpy(&fval, &p_buf[p_pkt_idx], sizeof(float));
+						memcpy(&fval, &p_rx_bfr[p_pkt_idx], sizeof(float));
 						p_pkt_idx += sizeof(float);
 						value = fval;
 						break;
 					}
 					case MYSQL_TYPE_LONGLONG:
-						value = bytes_to_num_adv_itr<uint64_t>(p_buf.ptr(), 8, p_pkt_idx);
+						value = bytes_to_num_adv_itr<uint64_t>(p_rx_bfr.ptr(), 8, p_pkt_idx);
 						break;
 					case MYSQL_TYPE_DOUBLE: {
 						double dval;
-						memcpy(&dval, &p_buf[p_pkt_idx], sizeof(double));
+						memcpy(&dval, &p_rx_bfr[p_pkt_idx], sizeof(double));
 						if (_dbl_to_string) {
 							value = vformat("%.9f", dval);
 						} else {
@@ -790,12 +776,12 @@ TypedArray<Dictionary> MariaDBConnector::_parse_prepared_exec(PackedByteArray &p
 					case MYSQL_TYPE_NEWDECIMAL:
 					case MYSQL_TYPE_STRING:
 					case MYSQL_TYPE_VAR_STRING: {
-						uint64_t field_len = _decode_lenenc_adv_itr(p_buf, p_pkt_idx);
+						uint64_t field_len = _decode_lenenc_adv_itr(p_rx_bfr, p_pkt_idx);
 						if (field_len == UINT64_MAX) {
 							value = "";	 // NULL string
 						} else {
 							String str_val;
-							str_val.parse_utf8((const char *)p_buf.ptr() + p_pkt_idx, field_len);
+							str_val.parse_utf8((const char *)p_rx_bfr.ptr() + p_pkt_idx, field_len);
 							value = str_val;
 							p_pkt_idx += field_len;
 						}
@@ -803,16 +789,16 @@ TypedArray<Dictionary> MariaDBConnector::_parse_prepared_exec(PackedByteArray &p
 					}
 					case MYSQL_TYPE_TIMESTAMP:
 					case MYSQL_TYPE_DATETIME: {
-						uint8_t ts_len = p_buf[p_pkt_idx++];
-						uint16_t year = bytes_to_num_adv_itr<uint16_t>(p_buf.ptr(), 2, p_pkt_idx);
-						uint8_t month = p_buf[p_pkt_idx++];
-						uint8_t day = p_buf[p_pkt_idx++];
-						uint8_t hour = p_buf[p_pkt_idx++];
-						uint8_t min = p_buf[p_pkt_idx++];
-						uint8_t sec = p_buf[p_pkt_idx++];
+						uint8_t ts_len = p_rx_bfr[p_pkt_idx++];
+						uint16_t year = bytes_to_num_adv_itr<uint16_t>(p_rx_bfr.ptr(), 2, p_pkt_idx);
+						uint8_t month = p_rx_bfr[p_pkt_idx++];
+						uint8_t day = p_rx_bfr[p_pkt_idx++];
+						uint8_t hour = p_rx_bfr[p_pkt_idx++];
+						uint8_t min = p_rx_bfr[p_pkt_idx++];
+						uint8_t sec = p_rx_bfr[p_pkt_idx++];
 
 						if (ts_len == 11) {
-							uint32_t micro = bytes_to_num_adv_itr<uint32_t>(p_buf.ptr(), 4, p_pkt_idx);
+							uint32_t micro = bytes_to_num_adv_itr<uint32_t>(p_rx_bfr.ptr(), 4, p_pkt_idx);
 							value = vformat(
 									"%04d-%02d-%02d %02d:%02d:%02d.%06d", year, month, day, hour, min, sec, micro);
 						} else {
@@ -824,7 +810,6 @@ TypedArray<Dictionary> MariaDBConnector::_parse_prepared_exec(PackedByteArray &p
 				}
 			}
 
-			print_line("p_pkt_idx:", p_pkt_idx, " remaining bytes:", p_buf.slice(p_pkt_idx, p_buf.size()).hex_encode());
 			row[col_name] = value;
 		}
 		rows.append(row);
@@ -833,7 +818,7 @@ TypedArray<Dictionary> MariaDBConnector::_parse_prepared_exec(PackedByteArray &p
 	return TypedArray<Dictionary>(rows);
 }
 
-TypedArray<Dictionary> MariaDBConnector::_parse_string_rows(PackedByteArray &p_buf,
+TypedArray<Dictionary> MariaDBConnector::_parse_string_rows(PackedByteArray &p_rx_bfr,
 		size_t &p_pkt_idx,
 		const TypedArray<Dictionary> &p_col_defs,
 		const bool p_dep_eof) {
@@ -843,23 +828,23 @@ TypedArray<Dictionary> MariaDBConnector::_parse_string_rows(PackedByteArray &p_b
 	int bfr_size = 0;
 	uint64_t len_encode = 0;
 	// process values
-	while (!done && p_pkt_idx < (size_t)p_buf.size()) {
+	while (!done && p_pkt_idx < (size_t)p_rx_bfr.size()) {
 		// Last packet (OK-Packet) is always 11 bytes, pkt len code = 3 bytes, seq = 1 byte, pkt
 		// data = 7 bytes
-		_last_error = _rcv_bfr_chk(p_buf, bfr_size, p_pkt_idx, 11);
+		_last_error = _rcv_bfr_chk(p_rx_bfr, bfr_size, p_pkt_idx, 11);
 		ERR_FAIL_COND_V_EDMSG(_last_error != OK,
 				TypedArray<Dictionary>(),
 				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + 11));
 
-		size_t pkt_len = bytes_to_num_adv_itr<size_t>(p_buf.ptr(), 3, p_pkt_idx);
-		_last_error = _rcv_bfr_chk(p_buf, bfr_size, p_pkt_idx, pkt_len);
+		size_t pkt_len = bytes_to_num_adv_itr<size_t>(p_rx_bfr.ptr(), 3, p_pkt_idx);
+		_last_error = _rcv_bfr_chk(p_rx_bfr, bfr_size, p_pkt_idx, pkt_len);
 		ERR_FAIL_COND_V_EDMSG(_last_error != OK,
 				TypedArray<Dictionary>(),
 				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + pkt_len));
 		// uint8_t seq_num = srvr_response[p_pkt_idx++];
 		p_pkt_idx++;
 
-		uint8_t marker = p_buf[p_pkt_idx];
+		uint8_t marker = p_rx_bfr[p_pkt_idx];
 
 		if (marker == 0xFE && p_dep_eof && pkt_len < 0xFFFFFF) {
 			done = true;
@@ -869,12 +854,12 @@ TypedArray<Dictionary> MariaDBConnector::_parse_string_rows(PackedByteArray &p_b
 		Dictionary dict;
 		// https://mariadb.com/kb/en/protocol-data-types/#length-encoded-strings
 		for (size_t col_idx = 0; col_idx < col_cnt; ++col_idx) {
-			_last_error = _rcv_bfr_chk(p_buf, bfr_size, p_pkt_idx, 2);
+			_last_error = _rcv_bfr_chk(p_rx_bfr, bfr_size, p_pkt_idx, 2);
 			ERR_FAIL_COND_V_EDMSG(_last_error != OK,
 					TypedArray<Dictionary>(),
 					vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + 2));
 
-			marker = p_buf[p_pkt_idx];
+			marker = p_rx_bfr[p_pkt_idx];
 			if (marker == 0xFF || marker == 0xFB || marker == 0x00) {
 				p_pkt_idx++;
 				// if (marker == 0xFF) // ERR_Packet
@@ -899,13 +884,13 @@ TypedArray<Dictionary> MariaDBConnector::_parse_string_rows(PackedByteArray &p_b
 					len_encode = 2;
 				}
 
-				_last_error = _rcv_bfr_chk(p_buf, bfr_size, p_pkt_idx, len_encode);
+				_last_error = _rcv_bfr_chk(p_rx_bfr, bfr_size, p_pkt_idx, len_encode);
 				ERR_FAIL_COND_V_EDMSG(_last_error != OK,
 						TypedArray<Dictionary>(),
 						vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + len_encode));
 
-				len_encode = _decode_lenenc_adv_itr(p_buf, p_pkt_idx);
-				_last_error = _rcv_bfr_chk(p_buf, bfr_size, p_pkt_idx, len_encode);
+				len_encode = _decode_lenenc_adv_itr(p_rx_bfr, p_pkt_idx);
+				_last_error = _rcv_bfr_chk(p_rx_bfr, bfr_size, p_pkt_idx, len_encode);
 				ERR_FAIL_COND_V_EDMSG(_last_error != OK,
 						TypedArray<Dictionary>(),
 						vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + len_encode));
@@ -919,7 +904,7 @@ TypedArray<Dictionary> MariaDBConnector::_parse_string_rows(PackedByteArray &p_b
 						!valid, TypedArray<Dictionary>(), vformat("ERROR: 'name' key is missing at index %d", col_idx));
 
 				if (len_encode > 0) {
-					PackedByteArray data = _get_pkt_bytes_adv_idx(p_buf, p_pkt_idx, len_encode);
+					PackedByteArray data = _get_pkt_bytes_adv_idx(p_rx_bfr, p_pkt_idx, len_encode);
 
 					valid = false;
 					int64_t field_type = int64_t(p_col_defs[col_idx].get("field_type", &valid));
@@ -940,106 +925,263 @@ TypedArray<Dictionary> MariaDBConnector::_parse_string_rows(PackedByteArray &p_b
 
 	return rows;
 }
-
-MariaDBConnector::ErrorCode MariaDBConnector::_prepared_params_send(const uint32_t p_stmt_id, const Array &p_params) {
+MariaDBConnector::ErrorCode MariaDBConnector::_prepared_params_send(const uint32_t p_stmt_id,
+		const TypedArray<Dictionary> &p_params) {
 	const int param_count = p_params.size();
+	if (_prep_column_data.has(p_stmt_id)) {
+		TypedArray<Dictionary> expected_cols = _prep_column_data[p_stmt_id];
+		if (expected_cols.size() > 0 && param_count == 0) {
+			ERR_PRINT("Expected parameter dictionary array, but received empty or invalid input.");
+			return ErrorCode::ERR_INVALID_PARAMETER;
+		}
+	}
+	PackedByteArray tx_buf;
+	tx_buf.push_back(0x17);	 // COM_STMT_EXECUTE
+
+	tx_buf.push_back((p_stmt_id >> 0) & 0xFF);	// Statement ID (4 bytes)
+	tx_buf.push_back((p_stmt_id >> 8) & 0xFF);
+	tx_buf.push_back((p_stmt_id >> 16) & 0xFF);
+	tx_buf.push_back((p_stmt_id >> 24) & 0xFF);
+
+	tx_buf.push_back(0x00);	 // flags
+	tx_buf.push_back(0x01);	 // iteration count
+	tx_buf.push_back(0x00);
+	tx_buf.push_back(0x00);
+	tx_buf.push_back(0x00);
+
 	const int nullmap_size = (param_count + 7) / 8;
-	size_t params_block_size = 10;	// header size: command + stmt_id + flags + iteration
-
 	if (param_count > 0) {
-		params_block_size += nullmap_size + 1;	// null-bitmap + new_params_bound_flag
-		TypedArray<Dictionary> column_data = _prep_column_data.get(p_stmt_id, TypedArray<Dictionary>());
-		print_line("column_data:", column_data);
+		Variant param_type = p_params[0];
+		if (param_type.get_type() != Variant::DICTIONARY) return ErrorCode::ERR_INVALID_PARAMETER;
 
-		if (column_data.size() < param_count) return ErrorCode::ERR_PREPARE_FAILED;
+		const int nullmap_offset = tx_buf.size();
+
+		for (int i = 0; i < nullmap_size; ++i) tx_buf.push_back(0x00);	// nullmap placeholder, filled below
+
+		tx_buf.push_back(0x01);	 // new_params_bound_flag
 
 		for (int i = 0; i < param_count; ++i) {
-			Variant v = p_params[i];
-			Dictionary col_meta = column_data[i];
-			// int field_type = int(col_meta["field_type"]);
+			Variant param_type = p_params[i];
+			if (param_type.get_type() != Variant::DICTIONARY) return ErrorCode::ERR_INVALID_PARAMETER;
 
-			switch (v.get_type()) {
-				case Variant::INT:
-					params_block_size += 2 + 8;
+			Dictionary param = p_params[i];
+			if (param.size() != 1) return ErrorCode::ERR_INVALID_PARAMETER;
+			Variant v = param.values()[0];
+			if (v.get_type() == Variant::NIL) {
+				int byte_i = i >> 3;
+				int bit_i = i & 7;
+				tx_buf[nullmap_offset + byte_i] |= (1 << bit_i);
+			}
+
+			uint16_t k = param.keys()[0];
+			switch (k) {
+				case FT_TINYINT:
+					tx_buf.push_back(MYSQL_TYPE_TINY);
+					tx_buf.push_back(SIGN_SIGNED);
 					break;
-				case Variant::STRING: {
-					int len = v.operator String().to_utf8_buffer().size();
-					params_block_size += 2 + 4 + len;
+				case FT_TINYINT_U:
+					tx_buf.push_back(MYSQL_TYPE_TINY);
+					tx_buf.push_back(SIGN_UNSIGNED);
+					break;
+				case FT_SHORT:
+					tx_buf.push_back(MYSQL_TYPE_SHORT);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_SHORT_U:
+					tx_buf.push_back(MYSQL_TYPE_SHORT);
+					tx_buf.push_back(SIGN_UNSIGNED);
+					break;
+				case FT_INT:
+					tx_buf.push_back(MYSQL_TYPE_LONG);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_INT_U:
+					tx_buf.push_back(MYSQL_TYPE_LONG);
+					tx_buf.push_back(SIGN_UNSIGNED);
+					break;
+				case FT_FLOAT:
+					tx_buf.push_back(MYSQL_TYPE_FLOAT);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_DOUBLE:
+					tx_buf.push_back(MYSQL_TYPE_DOUBLE);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_TIMESTAMP:
+					tx_buf.push_back(MYSQL_TYPE_TIMESTAMP);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_BIGINT:
+					tx_buf.push_back(MYSQL_TYPE_LONGLONG);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_BIGINT_U:
+					tx_buf.push_back(MYSQL_TYPE_LONGLONG);
+					tx_buf.push_back(SIGN_UNSIGNED);
+					break;
+				case FT_MEDIUMINT:
+					tx_buf.push_back(MYSQL_TYPE_INT24);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_MEDIUMINT_U:
+					tx_buf.push_back(MYSQL_TYPE_INT24);
+					tx_buf.push_back(SIGN_UNSIGNED);
+					break;
+				case FT_DATE:
+					tx_buf.push_back(MYSQL_TYPE_DATE);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_TIME:
+					tx_buf.push_back(MYSQL_TYPE_TIME);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_DATETIME:
+					tx_buf.push_back(MYSQL_TYPE_DATETIME);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_YEAR:
+					tx_buf.push_back(MYSQL_TYPE_YEAR);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_NEWDATE:
+					tx_buf.push_back(MYSQL_TYPE_NEWDATE);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_VARCHAR:
+					tx_buf.push_back(MYSQL_TYPE_VARCHAR);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_BIT:
+					tx_buf.push_back(MYSQL_TYPE_BIT);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_JSON:
+					tx_buf.push_back(MYSQL_TYPE_JSON);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_DECIMAL:
+					tx_buf.push_back(MYSQL_TYPE_NEWDECIMAL);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_ENUM:
+					tx_buf.push_back(MYSQL_TYPE_ENUM);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_SET:
+					tx_buf.push_back(MYSQL_TYPE_SET);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_TINYBLOB:
+					tx_buf.push_back(MYSQL_TYPE_TINY_BLOB);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_MEDIUMBLOB:
+					tx_buf.push_back(MYSQL_TYPE_MEDIUM_BLOB);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_LONGBLOB:
+					tx_buf.push_back(MYSQL_TYPE_LONG_BLOB);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_BLOB:
+					tx_buf.push_back(MYSQL_TYPE_BLOB);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_VAR_STRING:
+					tx_buf.push_back(MYSQL_TYPE_VAR_STRING);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_STRING:
+					tx_buf.push_back(MYSQL_TYPE_STRING);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				case FT_GEOMETRY:
+					tx_buf.push_back(MYSQL_TYPE_GEOMETRY);
+					tx_buf.push_back(SIGN_SIGNED);
+					break;
+				default:
+					return ErrorCode::ERR_INVALID_PARAMETER;
+			}
+		}
+
+		// Parameter values
+		for (int i = 0; i < param_count; ++i) {
+			Dictionary param = p_params[i];
+			FieldType field_type = FieldType(uint8_t(param.keys()[0]));
+			Variant value = param.values()[0];
+
+			if (value.get_type() == Variant::NIL) {
+				continue;
+			}
+
+			switch (field_type) {
+				case FT_TINYINT:
+				case FT_TINYINT_U:
+					tx_buf.push_back(uint8_t(value));
+					break;
+				case FT_SHORT:
+				case FT_SHORT_U: {
+					uint16_t val = uint16_t(value);
+					tx_buf.push_back(val & 0xFF);
+					tx_buf.push_back((val >> 8) & 0xFF);
 					break;
 				}
-				case Variant::NIL:
-					params_block_size += 2;
+				case FT_INT:
+				case FT_INT_U:
+				case FT_MEDIUMINT:
+				case FT_MEDIUMINT_U: {
+					uint32_t val = uint32_t(value);
+					tx_buf.push_back(val & 0xFF);
+					tx_buf.push_back((val >> 8) & 0xFF);
+					tx_buf.push_back((val >> 16) & 0xFF);
+					tx_buf.push_back((val >> 24) & 0xFF);
 					break;
+				}
+				case FT_BIGINT:
+				case FT_BIGINT_U: {
+					uint64_t val = uint64_t(value);
+					for (int b = 0; b < 8; ++b) tx_buf.push_back((val >> (b * 8)) & 0xFF);
+					break;
+				}
+				case FT_FLOAT: {
+					float f = value;
+					const uint8_t *ptr = reinterpret_cast<const uint8_t *>(&f);
+					for (int b = 0; b < 4; ++b) tx_buf.push_back(ptr[b]);
+					break;
+				}
+				case FT_DOUBLE: {
+					double d = value;
+					const uint8_t *ptr = reinterpret_cast<const uint8_t *>(&d);
+					for (int b = 0; b < 8; ++b) tx_buf.push_back(ptr[b]);
+					break;
+				}
+				case FT_VAR_STRING:
+				case FT_VARCHAR:
+				case FT_STRING:
+				case FT_DECIMAL:
+				case FT_JSON:
+				case FT_ENUM:
+				case FT_SET: {
+					PackedByteArray str_buf = value.operator String().to_utf8_buffer();
+					uint64_t len = str_buf.size();
+					if (len < 251) {
+						tx_buf.push_back(uint8_t(len));
+					} else {
+						tx_buf.push_back(0xFC);
+						tx_buf.push_back(len & 0xFF);
+						tx_buf.push_back((len >> 8) & 0xFF);
+					}
+					tx_buf.append_array(str_buf);
+					break;
+				}
 				default:
 					return ErrorCode::ERR_PREPARE_FAILED;
 			}
 		}
 	}
 
-	PackedByteArray send_buf;
-	send_buf.resize(params_block_size);
-	int offset = 0;
-
-	send_buf[offset++] = 0x17;	// COM_STMT_EXECUTE
-	send_buf.encode_u32(offset, p_stmt_id);
-	offset += 4;
-	send_buf[offset++] = 0x00;	// flags
-	send_buf.encode_u32(offset, 1);	 // iteration count
-	offset += 4;
-
-	if (param_count > 0) {
-		PackedByteArray null_map;
-		null_map.resize(nullmap_size);
-
-		for (int i = 0; i < param_count; ++i) {
-			if (p_params[i].get_type() == Variant::NIL) {
-				int byte_idx = i >> 3;
-				int bit_idx = i & 7;
-				null_map[byte_idx] |= (1 << bit_idx);
-			}
-		}
-
-		for (int b = 0; b < nullmap_size; ++b) {
-			send_buf[offset++] = null_map[b];
-		}
-
-		send_buf[offset++] = 1;	 // new_params_bound_flag
-
-		TypedArray<Dictionary> column_data = _prep_column_data.get(p_stmt_id, TypedArray<Dictionary>());
-
-		for (int i = 0; i < param_count; ++i) {
-			const Variant &v = p_params[i];
-			Dictionary col_meta = column_data[i];
-			int field_type = int(col_meta["field_type"]);
-			bool is_unsigned = int(col_meta["flags"]) & 32;
-
-			if (v.get_type() == Variant::INT) {
-				send_buf.encode_u16(offset, 0x08);	// MYSQL_TYPE_LONGLONG
-				offset += 2;
-				send_buf.encode_u64(offset, int64_t(v));
-				offset += 8;
-			} else if (v.get_type() == Variant::STRING) {
-				send_buf.encode_u16(offset, field_type);
-				offset += 2;
-				PackedByteArray ba = v.operator String().to_utf8_buffer();
-				send_buf.encode_u32(offset, ba.size());
-				offset += 4;
-				for (int j = 0; j < ba.size(); ++j) {
-					send_buf[offset++] = ba[j];
-				}
-			} else if (v.get_type() == Variant::NIL) {
-				send_buf.encode_u16(offset, 0x06);	// MYSQL_TYPE_NULL
-				offset += 2;
-			}
-		}
-	}
-
-	if (offset != int(params_block_size)) {
-		return ErrorCode::ERR_PACKET_LENGTH_MISMATCH;
-	}
-
-	_add_packet_header(send_buf, 0);
-	_stream->put_data(send_buf);
+	_add_packet_header(tx_buf, 0);
+	_stream->put_data(tx_buf);
 	return ErrorCode::OK;
 }
 
@@ -1117,7 +1259,7 @@ PackedByteArray MariaDBConnector::_read_buffer(uint32_t p_timeout, uint32_t p_ex
 	return out_buffer;
 }
 
-TypedArray<Dictionary> MariaDBConnector::_read_columns_data(PackedByteArray &p_srvr_response,
+TypedArray<Dictionary> MariaDBConnector::_read_columns_data(PackedByteArray &p_rx_bfr,
 		size_t &p_pkt_idx,
 		const uint16_t p_col_cnt) {
 	int bfr_size = 0;
@@ -1126,13 +1268,13 @@ TypedArray<Dictionary> MariaDBConnector::_read_columns_data(PackedByteArray &p_s
 
 	//	for each column (i.e column_count times)
 	for (size_t col_idx = 0; col_idx < p_col_cnt; ++col_idx) {
-		_last_error = _rcv_bfr_chk(p_srvr_response, bfr_size, p_pkt_idx, 24);
+		_last_error = _rcv_bfr_chk(p_rx_bfr, bfr_size, p_pkt_idx, 24);
 		ERR_FAIL_COND_V_EDMSG(_last_error != OK,
 				TypedArray<Dictionary>(),
 				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + 24));
 
-		size_t pkt_len = bytes_to_num_adv_itr<size_t>(p_srvr_response.ptr(), 3, p_pkt_idx);
-		_last_error = _rcv_bfr_chk(p_srvr_response, bfr_size, p_pkt_idx, pkt_len);
+		size_t pkt_len = bytes_to_num_adv_itr<size_t>(p_rx_bfr.ptr(), 3, p_pkt_idx);
+		_last_error = _rcv_bfr_chk(p_rx_bfr, bfr_size, p_pkt_idx, pkt_len);
 		ERR_FAIL_COND_V_EDMSG(_last_error != OK,
 				TypedArray<Dictionary>(),
 				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + pkt_len));
@@ -1142,28 +1284,28 @@ TypedArray<Dictionary> MariaDBConnector::_read_columns_data(PackedByteArray &p_s
 		//	Column Definition packet
 		// https://mariadb.com/kb/en/result-set-packets/#column-definition-packet
 		//	string<lenenc> catalog (always 'def')
-		len_encode = _decode_lenenc_adv_itr(p_srvr_response, p_pkt_idx);
-		String s = vbytes_to_utf8_adv_itr(p_srvr_response, p_pkt_idx, len_encode);
+		len_encode = _decode_lenenc_adv_itr(p_rx_bfr, p_pkt_idx);
+		String s = vbytes_to_utf8_adv_itr(p_rx_bfr, p_pkt_idx, len_encode);
 
 		//	string<lenenc> schema (database name)
-		len_encode = _decode_lenenc_adv_itr(p_srvr_response, p_pkt_idx);
-		vbytes_to_utf8_adv_itr(p_srvr_response, p_pkt_idx, len_encode);
+		len_encode = _decode_lenenc_adv_itr(p_rx_bfr, p_pkt_idx);
+		vbytes_to_utf8_adv_itr(p_rx_bfr, p_pkt_idx, len_encode);
 
 		//	string<lenenc> table alias
-		len_encode = _decode_lenenc_adv_itr(p_srvr_response, p_pkt_idx);
-		vbytes_to_utf8_adv_itr(p_srvr_response, p_pkt_idx, len_encode);
+		len_encode = _decode_lenenc_adv_itr(p_rx_bfr, p_pkt_idx);
+		vbytes_to_utf8_adv_itr(p_rx_bfr, p_pkt_idx, len_encode);
 
 		//	string<lenenc> table
-		len_encode = _decode_lenenc_adv_itr(p_srvr_response, p_pkt_idx);
-		vbytes_to_utf8_adv_itr(p_srvr_response, p_pkt_idx, len_encode);
+		len_encode = _decode_lenenc_adv_itr(p_rx_bfr, p_pkt_idx);
+		vbytes_to_utf8_adv_itr(p_rx_bfr, p_pkt_idx, len_encode);
 
 		//	string<lenenc> column alias
-		len_encode = _decode_lenenc_adv_itr(p_srvr_response, p_pkt_idx);
-		String column_name = vbytes_to_utf8_adv_itr(p_srvr_response, p_pkt_idx, len_encode);
+		len_encode = _decode_lenenc_adv_itr(p_rx_bfr, p_pkt_idx);
+		String column_name = vbytes_to_utf8_adv_itr(p_rx_bfr, p_pkt_idx, len_encode);
 
 		//	string<lenenc> column
-		len_encode = _decode_lenenc_adv_itr(p_srvr_response, p_pkt_idx);
-		vbytes_to_utf8_adv_itr(p_srvr_response, p_pkt_idx, len_encode);
+		len_encode = _decode_lenenc_adv_itr(p_rx_bfr, p_pkt_idx);
+		vbytes_to_utf8_adv_itr(p_rx_bfr, p_pkt_idx, len_encode);
 
 		// TODO(sigrudds1) Handle "MariaDBConnector extended capablities" (several
 		// locations)
@@ -1173,25 +1315,25 @@ TypedArray<Dictionary> MariaDBConnector::_read_columns_data(PackedByteArray &p_s
 		// int<1> data type: 0x00:type, 0x01: format string<lenenc> value
 
 		//	int<lenenc> length of fixed fields (=0x0C)
-		uint64_t remaining = _decode_lenenc_adv_itr(p_srvr_response, p_pkt_idx);
+		uint64_t remaining = _decode_lenenc_adv_itr(p_rx_bfr, p_pkt_idx);
 
 		//	int<2> character set number
-		uint16_t char_set = bytes_to_num_adv_itr<uint16_t>(p_srvr_response.ptr(), 2, p_pkt_idx);
+		uint16_t char_set = bytes_to_num_adv_itr<uint16_t>(p_rx_bfr.ptr(), 2, p_pkt_idx);
 
 		// int<4> max. column size the number in parenthesis eg int(10),
 		// varchar(255) uint32_t col_size =
-		uint32_t col_len = bytes_to_num_adv_itr<uint32_t>(p_srvr_response.ptr(), 4, p_pkt_idx);
+		uint32_t col_len = bytes_to_num_adv_itr<uint32_t>(p_rx_bfr.ptr(), 4, p_pkt_idx);
 
 		//	int<1> Field types
 		// https://mariadb.com/kb/en/result-set-packets/#field-types
-		uint8_t field_type = p_srvr_response[p_pkt_idx++];
+		uint8_t field_type = p_rx_bfr[p_pkt_idx++];
 
 		//	int<2> Field detail flag
 		// https://mariadb.com/kb/en/result-set-packets/#field-details-flag
-		uint16_t flags = bytes_to_num_adv_itr<uint16_t>(p_srvr_response.ptr(), 2, p_pkt_idx);
+		uint16_t flags = bytes_to_num_adv_itr<uint16_t>(p_rx_bfr.ptr(), 2, p_pkt_idx);
 
 		//	int<1> decimals
-		uint8_t decimals = p_srvr_response[p_pkt_idx++];
+		uint8_t decimals = p_rx_bfr[p_pkt_idx++];
 
 		//	int<2> - unused -
 		p_pkt_idx += 2;
@@ -1545,32 +1687,32 @@ Dictionary MariaDBConnector::prepared_statement(const String &p_sql) {
 	_last_transmitted = send_buffer_vec;
 
 	_stream->put_data(send_buffer_vec);
-	PackedByteArray srvr_response = _read_buffer(_server_timout_msec);
-	if (srvr_response.is_empty()) {
+	PackedByteArray rx_bfr = _read_buffer(_server_timout_msec);
+	if (rx_bfr.is_empty()) {
 		_last_error = ErrorCode::ERR_NO_RESPONSE;
 		return Dictionary();
 	}
 
 	size_t pkt_idx = 0;
-	size_t pkt_len = bytes_to_num_adv_itr<size_t>(srvr_response.ptr(), 3, pkt_idx);
+	size_t pkt_len = bytes_to_num_adv_itr<size_t>(rx_bfr.ptr(), 3, pkt_idx);
 	int bfr_size = 0;
-	_last_error = _rcv_bfr_chk(srvr_response, bfr_size, pkt_idx, pkt_len);
+	_last_error = _rcv_bfr_chk(rx_bfr, bfr_size, pkt_idx, pkt_len);
 	ERR_FAIL_COND_V_EDMSG(_last_error != OK,
 			Dictionary(),
 			vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_idx + pkt_len));
 
-	uint8_t seq_num = srvr_response[pkt_idx++];
-	uint8_t status = srvr_response[pkt_idx++];
+	uint8_t seq_num = rx_bfr[pkt_idx++];
+	uint8_t status = rx_bfr[pkt_idx++];
 
 	if (status != 0) {
 		_last_error = ErrorCode::ERR_PREPARE_FAILED;
-		_handle_server_error(srvr_response, pkt_idx);
+		_handle_server_error(rx_bfr, pkt_idx);
 		return Dictionary();
 	}
 
-	uint32_t statement_id = bytes_to_num_adv_itr<uint32_t>(srvr_response.ptr(), 4, pkt_idx);
-	uint16_t num_columns = bytes_to_num_adv_itr<uint16_t>(srvr_response.ptr(), 2, pkt_idx);
-	uint16_t num_params = bytes_to_num_adv_itr<uint16_t>(srvr_response.ptr(), 2, pkt_idx);
+	uint32_t statement_id = bytes_to_num_adv_itr<uint32_t>(rx_bfr.ptr(), 4, pkt_idx);
+	uint16_t num_columns = bytes_to_num_adv_itr<uint16_t>(rx_bfr.ptr(), 2, pkt_idx);
+	uint16_t num_params = bytes_to_num_adv_itr<uint16_t>(rx_bfr.ptr(), 2, pkt_idx);
 
 	pkt_idx += 3;
 
@@ -1582,47 +1724,51 @@ Dictionary MariaDBConnector::prepared_statement(const String &p_sql) {
 	TypedArray<Dictionary> col_data;
 	for (size_t p = 0; p < num_params; ++p) {
 		// process parameter def packet
-		pkt_len = bytes_to_num_adv_itr<size_t>(srvr_response.ptr(), 3, pkt_idx);
-		_last_error = _rcv_bfr_chk(srvr_response, bfr_size, pkt_idx, pkt_len);
+		pkt_len = bytes_to_num_adv_itr<size_t>(rx_bfr.ptr(), 3, pkt_idx);
+		_last_error = _rcv_bfr_chk(rx_bfr, bfr_size, pkt_idx, pkt_len);
 		ERR_FAIL_COND_V_EDMSG(_last_error != OK,
 				Dictionary(),
 				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_idx + pkt_len));
-		seq_num = srvr_response[pkt_idx++];
+		seq_num = rx_bfr[pkt_idx++];
 		pkt_idx += pkt_len;
 	}
 
-	col_data = _read_columns_data(srvr_response, pkt_idx, num_columns);
+	col_data = _read_columns_data(rx_bfr, pkt_idx, num_columns);
 
 	_prep_column_data[statement_id] = col_data;
 
 	return info;
 }
 
-TypedArray<Dictionary> MariaDBConnector::exec_prepped_select(uint32_t p_stmt_id, const Array &p_params) {
+TypedArray<Dictionary> MariaDBConnector::prepared_stmt_exec_select(uint32_t p_stmt_id,
+		const TypedArray<Dictionary> &p_params) {
+	// TypedArray<Dictionary> MariaDBConnector::exec_prepped_select(uint32_t p_stmt_id, const Array &p_params) {
+	// _last_error = _prepared_select_params_send(p_stmt_id, p_params);
 	_last_error = _prepared_params_send(p_stmt_id, p_params);
 	if (_last_error != OK) {
 		return TypedArray<Dictionary>();
 	}
 
-	PackedByteArray srvr_response = _read_buffer(_server_timout_msec);
-	if (srvr_response.is_empty()) {
+	PackedByteArray rx_bfr = _read_buffer(_server_timout_msec);
+	if (rx_bfr.is_empty()) {
 		_last_error = ErrorCode::ERR_NO_RESPONSE;
 		return TypedArray<Dictionary>();
 	}
 
-	print_line(srvr_response.hex_encode());
 	size_t pkt_idx = 0;
-	size_t pkt_len = bytes_to_num_adv_itr<size_t>(srvr_response.ptr(), 3, pkt_idx);
-
-	print_line("p_pkt_idx:", pkt_idx, " pkt_len:", pkt_len);
-
-	size_t seq_num = srvr_response[pkt_idx++];
+	size_t pkt_len = bytes_to_num_adv_itr<size_t>(rx_bfr.ptr(), 3, pkt_idx);
+	int bfr_size = 0;
+	_last_error = _rcv_bfr_chk(rx_bfr, bfr_size, pkt_idx, pkt_len);
+	ERR_FAIL_COND_V_EDMSG(_last_error != OK,
+			TypedArray<Dictionary>(),
+			vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_idx + pkt_len));
+	size_t seq_num = rx_bfr[pkt_idx++];
 
 	pkt_idx += 2;  // Skip over column count and status byte
 
 	TypedArray<Dictionary> col_data = _prep_column_data.get(p_stmt_id, TypedArray<Dictionary>());
 	if (col_data.size() == 0) {
-		uint8_t marker = srvr_response[pkt_idx++];
+		uint8_t marker = rx_bfr[pkt_idx++];
 		if (marker == 0xFF) {
 			// Proper error marker
 			_last_error = ERR_UNAVAILABLE;
@@ -1636,7 +1782,7 @@ TypedArray<Dictionary> MariaDBConnector::exec_prepped_select(uint32_t p_stmt_id,
 
 	bool dep_eof = (_client_capabilities & (uint64_t)Capabilities::CLIENT_DEPRECATE_EOF);
 
-	Variant rows = _parse_prepared_exec(srvr_response, pkt_idx, col_data, dep_eof);
+	Variant rows = _parse_prepared_exec(rx_bfr, pkt_idx, col_data, dep_eof);
 	if (rows.get_type() != Variant::ARRAY) {
 		_last_error = ERR_UNAVAILABLE;
 		return TypedArray<Dictionary>();
@@ -1645,33 +1791,39 @@ TypedArray<Dictionary> MariaDBConnector::exec_prepped_select(uint32_t p_stmt_id,
 	return TypedArray<Dictionary>(rows);
 }
 
-Dictionary MariaDBConnector::exec_prepped_command(uint32_t p_stmt_id, const Array &p_params) {
+Dictionary MariaDBConnector::prepared_stmt_exec_cmd(uint32_t p_stmt_id, const TypedArray<Dictionary> &p_params) {
 	_last_error = _prepared_params_send(p_stmt_id, p_params);
 	if (_last_error != OK) return Dictionary();
-	PackedByteArray rx_buf = _read_buffer(_server_timout_msec);
-	if (rx_buf.is_empty()) {
+	PackedByteArray rx_bfr = _read_buffer(_server_timout_msec);
+	if (rx_bfr.is_empty()) {
 		_last_error = ErrorCode::ERR_NO_RESPONSE;
 		return Dictionary();
 	}
 	size_t pkt_idx = 0;
-	print_line("pkt_idx:", pkt_idx, " starting bytes:", rx_buf.slice(pkt_idx, rx_buf.size()).hex_encode());
+	size_t pkt_len = bytes_to_num_adv_itr<size_t>(rx_bfr.ptr(), 3, pkt_idx);
+	int bfr_size = 0;
+	_last_error = _rcv_bfr_chk(rx_bfr, bfr_size, pkt_idx, pkt_len);
+	ERR_FAIL_COND_V_EDMSG(_last_error != OK,
+			Dictionary(),
+			vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_idx + pkt_len));
 
-	size_t pkt_len = bytes_to_num_adv_itr<size_t>(rx_buf.ptr(), 3, pkt_idx);
-	uint8_t status = rx_buf.decode_u8(pkt_idx++);
+	pkt_idx++;
+
+	uint8_t status = rx_bfr.decode_u8(pkt_idx++);
 	if (status != 0) {
-		_handle_server_error(rx_buf, pkt_idx);
+		_handle_server_error(rx_bfr, pkt_idx);
 		_last_error = ErrorCode::ERR_EXECUTE_FAILED;
 		return Dictionary();
 	}
 
-	uint64_t affected_rows = _decode_lenenc_adv_itr(rx_buf, pkt_idx);
-	uint64_t last_insert_id = _decode_lenenc_adv_itr(rx_buf, pkt_idx);
-	uint16_t status_flags = bytes_to_num_adv_itr<uint16_t>(rx_buf.ptr(), 2, pkt_idx);
-	uint16_t warnings = bytes_to_num_adv_itr<uint16_t>(rx_buf.ptr(), 2, pkt_idx);
+	uint64_t affected_rows = _decode_lenenc_adv_itr(rx_bfr, pkt_idx);
+	uint64_t last_insert_id = _decode_lenenc_adv_itr(rx_bfr, pkt_idx);
+	uint16_t status_flags = bytes_to_num_adv_itr<uint16_t>(rx_bfr.ptr(), 2, pkt_idx);
+	uint16_t warnings = bytes_to_num_adv_itr<uint16_t>(rx_bfr.ptr(), 2, pkt_idx);
 
 	String info;
-	if (pkt_idx < rx_buf.size()) {
-		info = String::utf8((const char *)&rx_buf[pkt_idx], rx_buf.size() - pkt_idx);
+	if (pkt_idx < rx_bfr.size()) {
+		info = String::utf8((const char *)&rx_bfr[pkt_idx], rx_bfr.size() - pkt_idx);
 	}
 
 	Dictionary result;
@@ -1683,7 +1835,7 @@ Dictionary MariaDBConnector::exec_prepped_command(uint32_t p_stmt_id, const Arra
 	return result;
 }
 
-void MariaDBConnector::close_statement(uint32_t stmt_id) {
+void MariaDBConnector::prepared_statement_close(uint32_t stmt_id) {
 	PackedByteArray send_buffer_vec;
 	send_buffer_vec.push_back(0x19);  // COM_STMT_CLOSE code (0x17)
 	send_buffer_vec.encode_u32(send_buffer_vec.size(), stmt_id);

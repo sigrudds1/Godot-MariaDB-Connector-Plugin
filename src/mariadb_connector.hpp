@@ -96,39 +96,37 @@ public:
 	};
 
 	enum FieldType : uint8_t {
-		FIELD_TYPE_DECIMAL = 1,	 // MYSQL_TYPE_DECIMAL (0)
-		FIELD_TYPE_TINY,  // MYSQL_TYPE_TINY (1) - signed 8-bit
-		FIELD_TYPE_UTINY,  // MYSQL_TYPE_TINY (1 + unsigned flag)
-		FIELD_TYPE_SHORT,  // MYSQL_TYPE_SHORT (2) - signed 16-bit
-		FIELD_TYPE_USHORT,	// MYSQL_TYPE_SHORT + unsigned
-		FIELD_TYPE_LONG,  // MYSQL_TYPE_LONG (3) - signed 32-bit
-		FIELD_TYPE_ULONG,  // MYSQL_TYPE_LONG + unsigned
-		FIELD_TYPE_FLOAT,  // MYSQL_TYPE_FLOAT (4)
-		FIELD_TYPE_DOUBLE,	// MYSQL_TYPE_DOUBLE (5)
-		FIELD_TYPE_NULL,  // MYSQL_TYPE_NULL (6)
-		FIELD_TYPE_TIMESTAMP,  // MYSQL_TYPE_TIMESTAMP (7)
-		FIELD_TYPE_LONGLONG,  // MYSQL_TYPE_LONGLONG (8) - signed 64-bit
-		FIELD_TYPE_ULONGLONG,  // MYSQL_TYPE_LONGLONG + unsigned
-		FIELD_TYPE_INT24,  // MYSQL_TYPE_INT24 (9) - signed 24-bit (rare)
-		FIELD_TYPE_UINT24,	// MYSQL_TYPE_INT24 + unsigned
-		FIELD_TYPE_DATE,  // MYSQL_TYPE_DATE (10)
-		FIELD_TYPE_TIME,  // MYSQL_TYPE_TIME (11)
-		FIELD_TYPE_DATETIME,  // MYSQL_TYPE_DATETIME (12)
-		FIELD_TYPE_YEAR,  // MYSQL_TYPE_YEAR (13)
-		FIELD_TYPE_NEWDATE,	 // MYSQL_TYPE_NEWDATE (14) - deprecated alias
-		FIELD_TYPE_VARCHAR,	 // MYSQL_TYPE_VARCHAR (15)
-		FIELD_TYPE_BIT,	 // MYSQL_TYPE_BIT (16)
-		FIELD_TYPE_JSON,  // MYSQL_TYPE_JSON (245)
-		FIELD_TYPE_NEWDECIMAL,	// MYSQL_TYPE_NEWDECIMAL (246)
-		FIELD_TYPE_ENUM,  // MYSQL_TYPE_ENUM (247)
-		FIELD_TYPE_SET,	 // MYSQL_TYPE_SET (248)
-		FIELD_TYPE_TINY_BLOB,  // MYSQL_TYPE_TINY_BLOB (249)
-		FIELD_TYPE_MEDIUM_BLOB,	 // MYSQL_TYPE_MEDIUM_BLOB (250)
-		FIELD_TYPE_LONG_BLOB,  // MYSQL_TYPE_LONG_BLOB (251)
-		FIELD_TYPE_BLOB,  // MYSQL_TYPE_BLOB (252)
-		FIELD_TYPE_VAR_STRING,	// MYSQL_TYPE_VAR_STRING (253)
-		FIELD_TYPE_STRING,	// MYSQL_TYPE_STRING (254)
-		FIELD_TYPE_GEOMETRY	 // MYSQL_TYPE_GEOMETRY (255)
+		FT_TINYINT,	 // MYSQL_TYPE_TINY (1) - signed 8-bit
+		FT_TINYINT_U,  // MYSQL_TYPE_TINY (1 + unsigned flag)
+		FT_SHORT,  // MYSQL_TYPE_SHORT (2) - signed 16-bit
+		FT_SHORT_U,	 // MYSQL_TYPE_SHORT + unsigned
+		FT_INT,	 // MYSQL_TYPE_LONG (3) - signed 32-bit
+		FT_INT_U,  // MYSQL_TYPE_LONG + unsigned
+		FT_FLOAT,  // MYSQL_TYPE_FLOAT (4)
+		FT_DOUBLE,	// MYSQL_TYPE_DOUBLE (5)
+		FT_TIMESTAMP,  // MYSQL_TYPE_TIMESTAMP (7)
+		FT_BIGINT,	// MYSQL_TYPE_LONGLONG (8) - signed 64-bit
+		FT_BIGINT_U,  // MYSQL_TYPE_LONGLONG + unsigned
+		FT_MEDIUMINT,  // MYSQL_TYPE_INT24 (9) - signed 24-bit (rare)
+		FT_MEDIUMINT_U,	 // MYSQL_TYPE_INT24 + unsigned
+		FT_DATE,  // MYSQL_TYPE_DATE (10)
+		FT_TIME,  // MYSQL_TYPE_TIME (11)
+		FT_DATETIME,  // MYSQL_TYPE_DATETIME (12)
+		FT_YEAR,  // MYSQL_TYPE_YEAR (13)
+		FT_NEWDATE,	 // MYSQL_TYPE_NEWDATE (14) - deprecated alias
+		FT_VARCHAR,	 // MYSQL_TYPE_VARCHAR (15)
+		FT_BIT,	 // MYSQL_TYPE_BIT (16)
+		FT_JSON,  // MYSQL_TYPE_JSON (245)
+		FT_DECIMAL,	 // MYSQL_TYPE_NEWDECIMAL (246)
+		FT_ENUM,  // MYSQL_TYPE_ENUM (247)
+		FT_SET,	 // MYSQL_TYPE_SET (248)
+		FT_TINYBLOB,  // MYSQL_TYPE_TINY_BLOB (249)
+		FT_MEDIUMBLOB,	// MYSQL_TYPE_MEDIUM_BLOB (250)
+		FT_LONGBLOB,  // MYSQL_TYPE_LONG_BLOB (251)
+		FT_BLOB,  // MYSQL_TYPE_BLOB (252)
+		FT_VAR_STRING,	// MYSQL_TYPE_VAR_STRING (253)
+		FT_STRING,	// MYSQL_TYPE_STRING (254)
+		FT_GEOMETRY	 // MYSQL_TYPE_GEOMETRY (255)
 	};
 
 private:
@@ -242,7 +240,7 @@ private:
 			const TypedArray<Dictionary> &col_defs,
 			const bool dep_eof);
 
-	ErrorCode _prepared_params_send(const uint32_t p_stmt_id, const Array &p_params);
+	ErrorCode _prepared_params_send(const uint32_t stmt_id, const TypedArray<Dictionary> &params);
 
 	Variant _query(const String &sql_stmt, const bool is_command = false);
 
@@ -354,9 +352,10 @@ public:
 
 	// Prepared statement section
 	Dictionary prepared_statement(const String &sql);
-	TypedArray<Dictionary> exec_prepped_select(uint32_t stmt_id, const Array &params);
-	Dictionary exec_prepped_command(uint32_t p_stmt_id, const Array &p_params);
-	void close_statement(uint32_t stmt_id);
+	TypedArray<Dictionary> prepared_stmt_exec_select(uint32_t stmt_id, const TypedArray<Dictionary> &params);
+	// TypedArray<Dictionary> exec_prepped_select(uint32_t stmt_id, const Array &params);
+	Dictionary prepared_stmt_exec_cmd(uint32_t stmt_id, const TypedArray<Dictionary> &params);
+	void prepared_statement_close(uint32_t stmt_id);
 
 	//TODO(sigrudds1) Implement SSL/TLS
 	//void tls_enable(bool enable);
