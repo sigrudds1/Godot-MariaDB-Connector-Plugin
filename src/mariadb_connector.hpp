@@ -219,18 +219,13 @@ private:
 	// void m_append_thread_data(PackedByteArray &p_data, const uint64_t p_timeout = 1000);
 	// void m_tcp_thread_func();
 
-	ErrorCode _rcv_bfr_chk(PackedByteArray &bfr, int &bfr_size, const size_t cur_pos, const size_t bytes_needed);
-
 	ErrorCode _client_protocol_v41(const AuthType p_srvr_auth_type, const PackedByteArray p_srvr_salt);
 	ErrorCode _connect();
-
-	String _parse_null_utf8_at_adv_idx(PackedByteArray p_buf, size_t &p_start_pos);
-	String _parse_null_utf8(PackedByteArray p_buf);
-
 	PackedByteArray _get_pkt_bytes_adv_idx(const PackedByteArray &src_buf, size_t &start_pos, const size_t byte_cnt);
-
 	AuthType _get_server_auth_type(String p_srvr_auth_name);
 	Variant _get_type_data(const int p_db_field_type, const PackedByteArray p_data);
+	void _handle_server_error(const PackedByteArray p_src_buffer, size_t &p_last_pos);
+	void _hash_password(String p_password);
 	TypedArray<Dictionary> _parse_prepared_exec(PackedByteArray &buf,
 			size_t &pkt_itr,
 			const TypedArray<Dictionary> &col_defs,
@@ -239,35 +234,17 @@ private:
 			size_t &pkt_itr,
 			const TypedArray<Dictionary> &col_defs,
 			const bool dep_eof);
-
+	String _parse_null_utf8_at_adv_idx(PackedByteArray p_buf, size_t &p_start_pos);
+	String _parse_null_utf8(PackedByteArray p_buf);
 	ErrorCode _prepared_params_send(const uint32_t stmt_id, const TypedArray<Dictionary> &params);
-
 	Variant _query(const String &sql_stmt, const bool is_command = false);
-
+	ErrorCode _rcv_bfr_chk(PackedByteArray &bfr, int &bfr_size, const size_t cur_pos, const size_t bytes_needed);
 	PackedByteArray _read_buffer(uint32_t timeout, uint32_t expected_bytes = 0);
 	TypedArray<Dictionary> _read_columns_data(PackedByteArray &srvr_response, size_t &pkt_itr, const uint16_t col_cnt);
 	//TODO(sigrudds1) Add error log file using the username in the filename
-	void _handle_server_error(const PackedByteArray p_src_buffer, size_t &p_last_pos);
-	void _hash_password(String p_password);
-
 	ErrorCode _server_init_handshake_v10(const PackedByteArray &p_src_buffer);
 	Variant _com_query_response(const bool p_is_command);
 	void _update_username(String P_username);
-
-	static inline bool is_valid_hex(const String &p_string, int expected_length = 0) {
-		if (expected_length > 0 && p_string.length() != expected_length) {
-			return false;
-		}
-
-		for (int i = 0; i < p_string.length(); i++) {
-			char32_t c = p_string.unicode_at(i);
-			if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f'))) {
-				return false;
-			}
-		}
-
-		return true;
-	}
 
 protected:
 	static void _bind_methods();

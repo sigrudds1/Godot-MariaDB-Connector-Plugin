@@ -74,6 +74,21 @@ static uint64_t _decode_lenenc_adv_itr(const PackedByteArray &p_buf, size_t &p_p
 	return marker;
 }
 
+static inline bool is_valid_hex(const String &p_string, int expected_length = 0) {
+	if (expected_length > 0 && p_string.length() != expected_length) {
+		return false;
+	}
+
+	for (int i = 0; i < p_string.length(); i++) {
+		char32_t c = p_string.unicode_at(i);
+		if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f'))) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 static inline PackedByteArray _sha1(const PackedByteArray &p_data) {
 	PackedByteArray output;
 	output.resize(20);
@@ -1562,21 +1577,6 @@ MariaDBConnector::ErrorCode MariaDBConnector::connect_db_ctx(const Ref<MariaDBCo
 			is_prehashed);
 }
 
-void MariaDBConnector::disconnect_db() {
-	// _tcp_polling = false;
-	if (is_connected_db()) {
-		// say goodbye too the server
-		// uint8_t output[5] = {0x01, 0x00, 0x00, 0x00, 0x01};
-		// String str = "0100000001";
-		// _stream->put_data(str.hex_decode());
-		_stream->put_data(PackedByteArray({ 0x01, 0x00, 0x00, 0x00, 0x01 }));
-		_stream->disconnect_from_host();
-	}
-	_authenticated = false;
-}
-
-Dictionary MariaDBConnector::excecute_command(const String &p_sql_stmt) { return _query(p_sql_stmt, true); }
-
 Ref<MariaDBConnector> MariaDBConnector::connection_instance(const Ref<MariaDBConnectContext> &p_context) {
 	ERR_FAIL_COND_V_EDMSG(p_context.is_null(), Ref<MariaDBConnector>(), "ConnectionContext is null.");
 
@@ -1608,6 +1608,21 @@ Ref<MariaDBConnector> MariaDBConnector::connection_instance(const Ref<MariaDBCon
 
 	return conn;
 }
+
+void MariaDBConnector::disconnect_db() {
+	// _tcp_polling = false;
+	if (is_connected_db()) {
+		// say goodbye too the server
+		// uint8_t output[5] = {0x01, 0x00, 0x00, 0x00, 0x01};
+		// String str = "0100000001";
+		// _stream->put_data(str.hex_decode());
+		_stream->put_data(PackedByteArray({ 0x01, 0x00, 0x00, 0x00, 0x01 }));
+		_stream->disconnect_from_host();
+	}
+	_authenticated = false;
+}
+
+Dictionary MariaDBConnector::excecute_command(const String &p_sql_stmt) { return _query(p_sql_stmt, true); }
 
 PackedByteArray MariaDBConnector::get_last_query_converted() { return _last_query_converted; }
 
@@ -1656,25 +1671,6 @@ PackedByteArray MariaDBConnector::get_mysql_native_password_hash(const PackedByt
 bool MariaDBConnector::is_connected_db() {
 	_stream->poll();
 	return _stream->get_status() == StreamPeerTCP::STATUS_CONNECTED;
-}
-
-TypedArray<Dictionary> MariaDBConnector::select_query(const String &p_sql_stmt) {
-	TypedArray<Dictionary> result;
-	Variant query_result = _query(p_sql_stmt);
-
-	if (query_result.get_type() == Variant::INT) {
-		// Not a valid SELECT response, INSERT, DELETE, UPDATE or error
-		return result;
-	}
-
-	Array raw_array = query_result;
-	for (int i = 0; i < raw_array.size(); i++) {
-		if (raw_array[i].get_type() == Variant::DICTIONARY) {
-			result.push_back(raw_array[i]);
-		}
-	}
-
-	return result;
 }
 
 Dictionary MariaDBConnector::prepared_statement(const String &p_sql) {
@@ -1842,6 +1838,25 @@ void MariaDBConnector::prepared_statement_close(uint32_t stmt_id) {
 	send_buffer_vec.resize(send_buffer_vec.size() + 4);
 	_add_packet_header(send_buffer_vec, 0);
 	_stream->put_data(send_buffer_vec);
+}
+
+TypedArray<Dictionary> MariaDBConnector::select_query(const String &p_sql_stmt) {
+	TypedArray<Dictionary> result;
+	Variant query_result = _query(p_sql_stmt);
+
+	if (query_result.get_type() == Variant::INT) {
+		// Not a valid SELECT response, INSERT, DELETE, UPDATE or error
+		return result;
+	}
+
+	Array raw_array = query_result;
+	for (int i = 0; i < raw_array.size(); i++) {
+		if (raw_array[i].get_type() == Variant::DICTIONARY) {
+			result.push_back(raw_array[i]);
+		}
+	}
+
+	return result;
 }
 
 void MariaDBConnector::set_dbl_to_string(bool p_is_to_str) { _dbl_to_string = p_is_to_str; }
