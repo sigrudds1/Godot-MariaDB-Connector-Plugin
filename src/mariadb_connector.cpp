@@ -103,9 +103,19 @@ static inline PackedByteArray _sha1(const PackedByteArray &p_data) {
 	return output;
 }
 
-MariaDBConnector::MariaDBConnector() { _stream.instantiate(); }
+MariaDBConnector::MariaDBConnector() {
+	_stream.instantiate();
+	_stream_mutex = memnew(Mutex);
+}
 
-MariaDBConnector::~MariaDBConnector() { disconnect_db(); }
+MariaDBConnector::~MariaDBConnector() {
+	disconnect_db();
+	if (_stream_mutex) {
+		_stream_mutex->~Mutex();
+		internal::gdextension_interface_mem_free(_stream_mutex);
+		_stream_mutex = nullptr;
+	}
+}
 
 // Bind all your methods used in this class
 void MariaDBConnector::_bind_methods() {
@@ -514,11 +524,12 @@ Variant MariaDBConnector::_com_query_response(const bool p_is_command) {
 
 MariaDBConnector::ErrorCode MariaDBConnector::_connect() {
 	disconnect_db();
-
+	_stream_mutex->lock();
 	_last_error = (ErrorCode)_stream->connect_to_host(_ip, _port);
 
 	if (_last_error != ErrorCode::OK) {
 		ERR_PRINT("Cannot connect to host with IP: " + String(_ip) + " and port: " + itos(_port));
+		_stream_mutex->unlock();
 		return _last_error;
 	}
 
@@ -534,12 +545,14 @@ MariaDBConnector::ErrorCode MariaDBConnector::_connect() {
 
 	if (_stream->get_status() != StreamPeerTCP::STATUS_CONNECTED) {
 		ERR_PRINT("TCP connection not established after polling. IP: " + String(_ip) + " Port: " + itos(_port));
+		_stream_mutex->unlock();
 		return ErrorCode::ERR_CONNECTION_ERROR;
 	}
 
 	PackedByteArray recv_buffer = _read_buffer(_server_timout_msec);
 	if (recv_buffer.size() <= 4) {
 		ERR_PRINT("connect: Receive buffer empty!");
+		_stream_mutex->unlock();
 		return ErrorCode::ERR_UNAVAILABLE;
 	}
 
@@ -561,6 +574,7 @@ MariaDBConnector::ErrorCode MariaDBConnector::_connect() {
 	// length
 	if (packet_length != ((uint32_t)recv_buffer.size() - 4)) {
 		ERR_PRINT("Receive buffer does not match expected size!");
+		_stream_mutex->unlock();
 		return ErrorCode::ERR_PACKET_LENGTH_MISMATCH;
 	}
 
@@ -568,6 +582,7 @@ MariaDBConnector::ErrorCode MariaDBConnector::_connect() {
 	// request, if client starts then start at 0
 	if (recv_buffer[3] != 0) {
 		ERR_PRINT("Packet sequence error!");
+		_stream_mutex->unlock();
 		return ErrorCode::ERR_SEQUENCE_MISMATCH;
 	}
 
@@ -581,12 +596,13 @@ MariaDBConnector::ErrorCode MariaDBConnector::_connect() {
 		_server_init_handshake_v10(recv_buffer);
 	} else {
 		ERR_PRINT("Unsupported protocol version in handshake packet!");
+		_stream_mutex->unlock();
 		return ErrorCode::ERR_PROTOCOL_MISMATCH;
 	}
 
 	// Passing as lambda so external non-static members can be accessed
 	// _tcp_thread = std::thread([this] { m_tcp_thread_func(); });
-
+	_stream_mutex->unlock();
 	return ErrorCode::OK;
 }  // m_connect
 
@@ -703,15 +719,17 @@ TypedArray<Dictionary> MariaDBConnector::_parse_prepared_exec(PackedByteArray &p
 	while (true) {
 		// Validate packet header presence (first 4 bytes)
 		_last_error = _rcv_bfr_chk(p_rx_bfr, bfr_size, p_pkt_idx, 4);
-		ERR_FAIL_COND_V_EDMSG(_last_error != OK,
-				TypedArray<Dictionary>(),
-				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + 4));
+		if (_last_error != OK) {
+			ERR_PRINT(vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + 4));
+			return TypedArray<Dictionary>();
+		}
 
 		size_t pkt_len = bytes_to_num_adv_itr<size_t>(p_rx_bfr.ptr(), 3, p_pkt_idx);
 		_last_error = _rcv_bfr_chk(p_rx_bfr, bfr_size, p_pkt_idx, pkt_len);
-		ERR_FAIL_COND_V_EDMSG(_last_error != OK,
-				TypedArray<Dictionary>(),
-				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + pkt_len));
+		if (_last_error != OK) {
+			ERR_PRINT(vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + pkt_len));
+			return TypedArray<Dictionary>();
+		}
 
 		uint8_t seq_num = p_rx_bfr[p_pkt_idx++];
 		uint8_t header_byte = p_rx_bfr[p_pkt_idx++];  // 0x00 or 0xFE
@@ -832,15 +850,17 @@ TypedArray<Dictionary> MariaDBConnector::_parse_string_rows(PackedByteArray &p_r
 		// Last packet (OK-Packet) is always 11 bytes, pkt len code = 3 bytes, seq = 1 byte, pkt
 		// data = 7 bytes
 		_last_error = _rcv_bfr_chk(p_rx_bfr, bfr_size, p_pkt_idx, 11);
-		ERR_FAIL_COND_V_EDMSG(_last_error != OK,
-				TypedArray<Dictionary>(),
-				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + 11));
+		if (_last_error != OK) {
+			ERR_PRINT(vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + 11));
+			return TypedArray<Dictionary>();
+		}
 
 		size_t pkt_len = bytes_to_num_adv_itr<size_t>(p_rx_bfr.ptr(), 3, p_pkt_idx);
 		_last_error = _rcv_bfr_chk(p_rx_bfr, bfr_size, p_pkt_idx, pkt_len);
-		ERR_FAIL_COND_V_EDMSG(_last_error != OK,
-				TypedArray<Dictionary>(),
-				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + pkt_len));
+		if (_last_error != OK) {
+			ERR_PRINT(vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + pkt_len));
+			return TypedArray<Dictionary>();
+		}
 		// uint8_t seq_num = srvr_response[p_pkt_idx++];
 		p_pkt_idx++;
 
@@ -855,10 +875,10 @@ TypedArray<Dictionary> MariaDBConnector::_parse_string_rows(PackedByteArray &p_r
 		// https://mariadb.com/kb/en/protocol-data-types/#length-encoded-strings
 		for (size_t col_idx = 0; col_idx < col_cnt; ++col_idx) {
 			_last_error = _rcv_bfr_chk(p_rx_bfr, bfr_size, p_pkt_idx, 2);
-			ERR_FAIL_COND_V_EDMSG(_last_error != OK,
-					TypedArray<Dictionary>(),
-					vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + 2));
-
+			if (_last_error != OK) {
+				ERR_PRINT(vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + 2));
+				return TypedArray<Dictionary>();
+			}
 			marker = p_rx_bfr[p_pkt_idx];
 			if (marker == 0xFF || marker == 0xFB || marker == 0x00) {
 				p_pkt_idx++;
@@ -885,16 +905,19 @@ TypedArray<Dictionary> MariaDBConnector::_parse_string_rows(PackedByteArray &p_r
 				}
 
 				_last_error = _rcv_bfr_chk(p_rx_bfr, bfr_size, p_pkt_idx, len_encode);
-				ERR_FAIL_COND_V_EDMSG(_last_error != OK,
-						TypedArray<Dictionary>(),
-						vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + len_encode));
+				if (_last_error != OK) {
+					ERR_PRINT(
+							vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + len_encode));
+					return TypedArray<Dictionary>();
+				}
 
 				len_encode = _decode_lenenc_adv_itr(p_rx_bfr, p_pkt_idx);
 				_last_error = _rcv_bfr_chk(p_rx_bfr, bfr_size, p_pkt_idx, len_encode);
-				ERR_FAIL_COND_V_EDMSG(_last_error != OK,
-						TypedArray<Dictionary>(),
-						vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + len_encode));
-
+				if (_last_error != OK) {
+					ERR_PRINT(
+							vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + len_encode));
+					return TypedArray<Dictionary>();
+				}
 				bool valid = false;
 
 				// NOTE when accessing Dictionaries in C++ you must assign the value to
@@ -1203,19 +1226,22 @@ Variant MariaDBConnector::_query(const String &p_sql_stmt, const bool p_is_comma
 		}
 	}
 
-	PackedByteArray send_buffer_vec;
+	PackedByteArray tx_bfr;
 
-	send_buffer_vec.push_back(0x03);  // COM_QUERY
+	tx_bfr.push_back(0x03);	 // COM_QUERY
 	_last_query_converted = p_sql_stmt.to_utf8_buffer();
 
-	send_buffer_vec.append_array(_last_query_converted);
-	_add_packet_header(send_buffer_vec, 0);
+	tx_bfr.append_array(_last_query_converted);
+	_add_packet_header(tx_bfr, 0);
 
-	_last_transmitted = send_buffer_vec;
-	_last_error = (ErrorCode)_stream->put_data(send_buffer_vec);
+	_last_transmitted = tx_bfr;
+	_stream_mutex->lock();
+	_last_error = (ErrorCode)_stream->put_data(tx_bfr);
 	if (_last_error != OK) return _last_error;
 
-	return _com_query_response(p_is_command);
+	Variant res = _com_query_response(p_is_command);
+	_stream_mutex->unlock();
+	return res;
 }
 
 MariaDBConnector::ErrorCode MariaDBConnector::_rcv_bfr_chk(PackedByteArray &p_bfr,
@@ -1266,15 +1292,17 @@ TypedArray<Dictionary> MariaDBConnector::_read_columns_data(PackedByteArray &p_r
 	//	for each column (i.e column_count times)
 	for (size_t col_idx = 0; col_idx < p_col_cnt; ++col_idx) {
 		_last_error = _rcv_bfr_chk(p_rx_bfr, bfr_size, p_pkt_idx, 24);
-		ERR_FAIL_COND_V_EDMSG(_last_error != OK,
-				TypedArray<Dictionary>(),
-				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + 24));
+		if (_last_error != OK) {
+			ERR_PRINT(vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + 24));
+			return TypedArray<Dictionary>();
+		}
 
 		size_t pkt_len = bytes_to_num_adv_itr<size_t>(p_rx_bfr.ptr(), 3, p_pkt_idx);
 		_last_error = _rcv_bfr_chk(p_rx_bfr, bfr_size, p_pkt_idx, pkt_len);
-		ERR_FAIL_COND_V_EDMSG(_last_error != OK,
-				TypedArray<Dictionary>(),
-				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + pkt_len));
+		if (_last_error != OK) {
+			ERR_PRINT(vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, p_pkt_idx + pkt_len));
+			return TypedArray<Dictionary>();
+		}
 		// uint8_t seq_num = p_srvr_response[p_pkt_idx++];
 		p_pkt_idx++;
 
@@ -1593,6 +1621,7 @@ Ref<MariaDBConnector> MariaDBConnector::connection_instance(const Ref<MariaDBCon
 
 void MariaDBConnector::disconnect_db() {
 	// _tcp_polling = false;
+	_stream_mutex->lock();
 	if (is_connected_db()) {
 		// say goodbye too the server
 		// uint8_t output[5] = {0x01, 0x00, 0x00, 0x00, 0x01};
@@ -1602,6 +1631,7 @@ void MariaDBConnector::disconnect_db() {
 		_stream->disconnect_from_host();
 	}
 	_authenticated = false;
+	_stream_mutex->unlock();
 }
 
 Dictionary MariaDBConnector::excecute_command(const String &p_sql_stmt) { return _query(p_sql_stmt, true); }
@@ -1656,7 +1686,10 @@ bool MariaDBConnector::is_connected_db() {
 }
 
 void MariaDBConnector::ping_srvr() {
+	_stream_mutex->lock();
 	if (is_connected_db()) _stream->put_data(PackedByteArray({ 0x01, 0x00, 0x00, 0x00, 0x0E }));
+	PackedByteArray ret = _read_buffer(1000, 12);
+	_stream_mutex->unlock();
 }
 
 Dictionary MariaDBConnector::prepared_statement(const String &p_sql) {
@@ -1668,11 +1701,13 @@ Dictionary MariaDBConnector::prepared_statement(const String &p_sql) {
 	_add_packet_header(send_buffer_vec, 0);
 	_last_transmitted = send_buffer_vec;
 
+	_stream_mutex->lock();
 	_last_error = (ErrorCode)_stream->put_data(send_buffer_vec);
 	if (_last_error != OK) return Dictionary();
 	PackedByteArray rx_bfr = _read_buffer(_server_timout_msec);
 	if (rx_bfr.is_empty()) {
 		_last_error = ErrorCode::ERR_NO_RESPONSE;
+		_stream_mutex->unlock();
 		return Dictionary();
 	}
 
@@ -1680,16 +1715,18 @@ Dictionary MariaDBConnector::prepared_statement(const String &p_sql) {
 	size_t pkt_len = bytes_to_num_adv_itr<size_t>(rx_bfr.ptr(), 3, pkt_idx);
 	int bfr_size = 0;
 	_last_error = _rcv_bfr_chk(rx_bfr, bfr_size, pkt_idx, pkt_len);
-	ERR_FAIL_COND_V_EDMSG(_last_error != OK,
-			Dictionary(),
-			vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_idx + pkt_len));
-
+	if (_last_error != OK) {
+		ERR_PRINT(vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_idx + pkt_len));
+		_stream_mutex->unlock();
+		return Dictionary();
+	}
 	uint8_t seq_num = rx_bfr[pkt_idx++];
 	uint8_t status = rx_bfr[pkt_idx++];
 
 	if (status != 0) {
 		_last_error = ErrorCode::ERR_PREPARE_FAILED;
 		_handle_server_error(rx_bfr, pkt_idx);
+		_stream_mutex->unlock();
 		return Dictionary();
 	}
 
@@ -1709,15 +1746,16 @@ Dictionary MariaDBConnector::prepared_statement(const String &p_sql) {
 		// process parameter def packet
 		pkt_len = bytes_to_num_adv_itr<size_t>(rx_bfr.ptr(), 3, pkt_idx);
 		_last_error = _rcv_bfr_chk(rx_bfr, bfr_size, pkt_idx, pkt_len);
-		ERR_FAIL_COND_V_EDMSG(_last_error != OK,
-				Dictionary(),
-				vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_idx + pkt_len));
+		if (_last_error != OK) {
+			ERR_PRINT(vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_idx + pkt_len));
+			return Dictionary();
+		}
 		seq_num = rx_bfr[pkt_idx++];
 		pkt_idx += pkt_len;
 	}
 
 	col_data = _read_columns_data(rx_bfr, pkt_idx, num_columns);
-
+	_stream_mutex->unlock();
 	_prep_column_data[statement_id] = col_data;
 
 	return info;
@@ -1727,6 +1765,7 @@ TypedArray<Dictionary> MariaDBConnector::prepared_stmt_exec_select(uint32_t p_st
 		const TypedArray<Dictionary> &p_params) {
 	// TypedArray<Dictionary> MariaDBConnector::exec_prepped_select(uint32_t p_stmt_id, const Array &p_params) {
 	// _last_error = _prepared_select_params_send(p_stmt_id, p_params);
+	_stream_mutex->lock();
 	_last_error = _prepared_params_send(p_stmt_id, p_params);
 	if (_last_error != OK) {
 		return TypedArray<Dictionary>();
@@ -1735,6 +1774,7 @@ TypedArray<Dictionary> MariaDBConnector::prepared_stmt_exec_select(uint32_t p_st
 	PackedByteArray rx_bfr = _read_buffer(_server_timout_msec);
 	if (rx_bfr.is_empty()) {
 		_last_error = ErrorCode::ERR_NO_RESPONSE;
+		_stream_mutex->unlock();
 		return TypedArray<Dictionary>();
 	}
 
@@ -1742,10 +1782,20 @@ TypedArray<Dictionary> MariaDBConnector::prepared_stmt_exec_select(uint32_t p_st
 	size_t pkt_len = bytes_to_num_adv_itr<size_t>(rx_bfr.ptr(), 3, pkt_idx);
 	int bfr_size = 0;
 	_last_error = _rcv_bfr_chk(rx_bfr, bfr_size, pkt_idx, pkt_len);
-	ERR_FAIL_COND_V_EDMSG(_last_error != OK,
-			TypedArray<Dictionary>(),
-			vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_idx + pkt_len));
+	if (_last_error != OK) {
+		_stream_mutex->unlock();
+		ERR_PRINT(vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_idx + pkt_len));
+		return TypedArray<Dictionary>();
+	}
 	size_t seq_num = rx_bfr[pkt_idx++];
+
+	uint8_t status = rx_bfr[pkt_idx];
+	if (status == 0xFF) {
+		_handle_server_error(rx_bfr, ++pkt_idx);
+		_last_error = ERR_PREPARE_FAILED;
+		_stream_mutex->unlock();
+		return TypedArray<Dictionary>();
+	}
 
 	pkt_idx += 2;  // Skip over column count and status byte
 
@@ -1760,6 +1810,7 @@ TypedArray<Dictionary> MariaDBConnector::prepared_stmt_exec_select(uint32_t p_st
 			_last_error = ERR_UNAVAILABLE;
 			ERR_PRINT(vformat("exec_prepped_select unexpected marker: 0x%02X", marker));
 		}
+		_stream_mutex->unlock();
 		return TypedArray<Dictionary>();
 	}
 
@@ -1768,63 +1819,86 @@ TypedArray<Dictionary> MariaDBConnector::prepared_stmt_exec_select(uint32_t p_st
 	Variant rows = _parse_prepared_exec(rx_bfr, pkt_idx, col_data, dep_eof);
 	if (rows.get_type() != Variant::ARRAY) {
 		_last_error = ERR_UNAVAILABLE;
+		_stream_mutex->unlock();
 		return TypedArray<Dictionary>();
 	}
 
+	_stream_mutex->unlock();
 	return TypedArray<Dictionary>(rows);
 }
 
 Dictionary MariaDBConnector::prepared_stmt_exec_cmd(uint32_t p_stmt_id, const TypedArray<Dictionary> &p_params) {
+	_stream_mutex->lock();
+
 	_last_error = _prepared_params_send(p_stmt_id, p_params);
-	if (_last_error != OK) return Dictionary();
+	if (_last_error != OK) {
+		_stream_mutex->unlock();
+		return Dictionary();
+	}
 	PackedByteArray rx_bfr = _read_buffer(_server_timout_msec);
 	if (rx_bfr.is_empty()) {
 		_last_error = ErrorCode::ERR_NO_RESPONSE;
+		_stream_mutex->unlock();
 		return Dictionary();
 	}
+
 	size_t pkt_idx = 0;
 	size_t pkt_len = bytes_to_num_adv_itr<size_t>(rx_bfr.ptr(), 3, pkt_idx);
 	int bfr_size = 0;
 	_last_error = _rcv_bfr_chk(rx_bfr, bfr_size, pkt_idx, pkt_len);
-	ERR_FAIL_COND_V_EDMSG(_last_error != OK,
-			Dictionary(),
-			vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_idx + pkt_len));
-
-	pkt_idx++;
-
-	uint8_t status = rx_bfr.decode_u8(pkt_idx++);
-	if (status != 0) {
-		_handle_server_error(rx_bfr, pkt_idx);
-		_last_error = ErrorCode::ERR_EXECUTE_FAILED;
+	if (_last_error != OK) {
+		_stream_mutex->unlock();
+		ERR_PRINT(vformat("ERR_PACKET_LENGTH_MISMATCH rcvd %d expect %d", bfr_size, pkt_idx + pkt_len));
 		return Dictionary();
 	}
 
-	uint64_t affected_rows = _decode_lenenc_adv_itr(rx_bfr, pkt_idx);
-	uint64_t last_insert_id = _decode_lenenc_adv_itr(rx_bfr, pkt_idx);
-	uint16_t status_flags = bytes_to_num_adv_itr<uint16_t>(rx_bfr.ptr(), 2, pkt_idx);
-	uint16_t warnings = bytes_to_num_adv_itr<uint16_t>(rx_bfr.ptr(), 2, pkt_idx);
+	pkt_idx++;
 
-	String info;
-	if (pkt_idx < rx_bfr.size()) {
-		info = String::utf8((const char *)&rx_bfr[pkt_idx], rx_bfr.size() - pkt_idx);
+	uint8_t header = rx_bfr.decode_u8(pkt_idx++);
+	if (header == 0xFF) {
+		// ERR Packet
+		_handle_server_error(rx_bfr, pkt_idx);
+		_last_error = ErrorCode::ERR_EXECUTE_FAILED;
+		_stream_mutex->unlock();
+		return Dictionary();
+	} else if (header == 0x00) {
+		// OK Packet
+		uint64_t affected_rows = _decode_lenenc_adv_itr(rx_bfr, pkt_idx);
+		uint64_t last_insert_id = _decode_lenenc_adv_itr(rx_bfr, pkt_idx);
+		uint16_t status_flags = bytes_to_num_adv_itr<uint16_t>(rx_bfr.ptr(), 2, pkt_idx);
+		uint16_t warnings = bytes_to_num_adv_itr<uint16_t>(rx_bfr.ptr(), 2, pkt_idx);
+
+		String info;
+		if (pkt_idx < rx_bfr.size()) {
+			info = String::utf8((const char *)&rx_bfr[pkt_idx], rx_bfr.size() - pkt_idx);
+		}
+
+		Dictionary result;
+		result["affected_rows"] = affected_rows;
+		result["last_insert_id"] = last_insert_id;
+		result["status_flags"] = status_flags;
+		result["warnings"] = warnings;
+		result["info"] = info;
+		_stream_mutex->unlock();
+		return result;
+	} else {
+		// Possibly a result set packet — not handled in this path
+		_last_error = (ErrorCode)ERR_PARSE_ERROR;
+		_stream_mutex->unlock();
+		ERR_PRINT("Unexpected header byte: " + itos(header));
+		return Dictionary();
 	}
-
-	Dictionary result;
-	result["affected_rows"] = affected_rows;
-	result["last_insert_id"] = last_insert_id;
-	result["status_flags"] = status_flags;
-	result["warnings"] = warnings;
-	result["info"] = info;
-	return result;
 }
 
 MariaDBConnector::ErrorCode MariaDBConnector::prepared_statement_close(uint32_t stmt_id) {
-	PackedByteArray send_buffer_vec;
-	send_buffer_vec.push_back(0x19);  // COM_STMT_CLOSE code (0x17)
-	send_buffer_vec.encode_u32(send_buffer_vec.size(), stmt_id);
-	send_buffer_vec.resize(send_buffer_vec.size() + 4);
-	_add_packet_header(send_buffer_vec, 0);
-	_last_error = (ErrorCode)_stream->put_data(send_buffer_vec);
+	PackedByteArray tx_bfr;
+	tx_bfr.resize(5);
+	tx_bfr[0] = 0x19;  // COM_STMT_CLOSE
+	tx_bfr.encode_u32(1, stmt_id);
+	_add_packet_header(tx_bfr, 0);
+	_stream_mutex->lock();
+	_last_error = (ErrorCode)_stream->put_data(tx_bfr);
+	_stream_mutex->unlock();
 	return _last_error;
 }
 

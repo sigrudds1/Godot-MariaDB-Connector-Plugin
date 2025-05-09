@@ -42,7 +42,7 @@
 
 // #include <thread>
 // #include <godot_cpp/classes/thread.hpp>
-// #include <godot_cpp/classes/mutex.hpp>
+#include <godot_cpp/classes/mutex.hpp>
 
 using namespace godot;
 
@@ -189,6 +189,7 @@ private:
 	PackedByteArray _dbname;
 
 	Ref<StreamPeerTCP> _stream;
+	Mutex *_stream_mutex = nullptr;
 	String _ip;
 	int _port = 0;
 	uint32_t _server_timout_msec = 1000;
