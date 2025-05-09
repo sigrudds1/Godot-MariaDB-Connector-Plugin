@@ -66,7 +66,10 @@ If you find this project useful and would like to support development, consider 
 - [Ko-fi](https://ko-fi.com/vikingtinkerer)
 
 ## Version Updates Summary
-v1.5.0 - Added static member connect_instance, doc additions and updates, added gdscript examples in demo. MariaDBConnector::connect_instance returns a connected MariaDBConnector instance bypassing the need for the new() constructor and a connect_db... method.
+v1.6.0 - Added prepared statement functionality.
+
+v1.5.0 - Added static member connect_instance, doc additions and updates, added gdscript examples in demo. MariaDBConnector::connect_instance returns a 
+connected MariaDBConnector instance bypassing the need for the new() constructor and a connect_db... method.
 
 v1.4.0 - Added new breakout methods for query and supporting last_error member variable to test for errors, context method name was changed, added gdscript examples in demo.
 
@@ -79,4 +82,6 @@ v1.2.1 - Added authtype description to editor docs.
 v1.2.0 - Added PHC Winner Argon2 slow hash and mbedtls based high entropy salt generation that uses the salt length property.
 
 ## Bug Fixes
+v1.6.1 - Fixed crashes on multi-threaded connections, fixed error reporting bug on prepared statements.
+
 v1.2.0 - Zapped reintroduced prehash = false bug, for good this time.
